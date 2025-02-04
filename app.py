@@ -1,11 +1,10 @@
-# Install necessary libraries
+# Import necessary libraries
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from textblob import TextBlob
 import yake
 import nltk
-import chardet  # For encoding detection
 
 # Initialize NLTK
 nltk.download("stopwords")
@@ -40,13 +39,6 @@ def detect_themes(text):
         return ", ".join(detected_themes) if detected_themes else "No clear theme"
     return "No clear theme"
 
-# Function to detect encoding of the uploaded file
-def detect_encoding(file):
-    raw_data = file.read(1024)  # Read the first 1KB for detection
-    result = chardet.detect(raw_data)
-    file.seek(0)  # Reset file pointer after detection
-    return result["encoding"]
-
 # Main Streamlit app function
 def main():
     # App title
@@ -57,11 +49,11 @@ def main():
 
     if data_file is not None:
         try:
-            # Detect encoding and read the file
-            encoding = detect_encoding(data_file)
-            st.write(f"Detected file encoding: {encoding}")
-
-            df = pd.read_csv(data_file, encoding=encoding)
+            # Attempt to read the file with utf-8, fallback to ISO-8859-1
+            try:
+                df = pd.read_csv(data_file, encoding="utf-8", errors="ignore")
+            except UnicodeDecodeError:
+                df = pd.read_csv(data_file, encoding="ISO-8859-1", errors="ignore")
 
             # Validate required columns
             required_columns = {"Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"}
@@ -89,37 +81,4 @@ def main():
                 lon="Longitude",
                 hover_name="Buildings Name",
                 hover_data={"Themes": True, "Corrected Response": True},
-                color_discrete_sequence=["blue"],
-                title="Classroom Feedback Map",
-                zoom=12,
-            )
-            map_fig.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
-            st.plotly_chart(map_fig)
-
-            # Dropdown for Building Details
-            st.header("Building Details")
-            selected_building = st.selectbox("Select a Building", df["Buildings Name"].unique())
-            if selected_building:
-                building_data = df[df["Buildings Name"] == selected_building]
-                themes_highlighted = ", ".join(building_data["Themes"].unique())
-                corrected_responses = "\n".join(building_data["Corrected Response"].tolist())
-
-                st.subheader(f"Details for {selected_building}")
-                st.write(f"**Themes Highlighted:** {themes_highlighted}")
-                st.write("**Corrected Responses:**")
-                st.text_area("", corrected_responses, height=200)
-
-            # Filter by Theme
-            st.header("Filter by Themes")
-            theme_selected = st.radio("Select a Theme", list(THEME_DICT.keys()))
-            if theme_selected:
-                filtered_data = df[df["Themes"].str.contains(theme_selected, na=False)]
-                st.write(f"Buildings mentioning '{theme_selected}':")
-                st.dataframe(filtered_data[["Buildings Name", "Themes", "Corrected Response"]])
-
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
-
-# Run the app
-if __name__ == "__main__":
-    main()
+                color_dis
