@@ -2,19 +2,25 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import nltk
+import torch
 from nltk.sentiment import SentimentIntensityAnalyzer
 from transformers import pipeline
 
-# Install NLTK resources
+# Initialize NLTK
 nltk.download("vader_lexicon")
 sia = SentimentIntensityAnalyzer()
 
-# Load AI models
+# Check for GPU availability
+device = 0 if torch.cuda.is_available() else -1  # Use GPU if available, else CPU
+
+# Load AI models with error handling
 try:
-    summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-    grammar_correction = pipeline("text2text-generation", model="textattack/roberta-base-CoLA")  # Alternative model
+    summarizer = pipeline("summarization", model="facebook/bart-large-cnn", device=device)
+    grammar_correction = pipeline("text2text-generation", model="textattack/roberta-base-CoLA", device=device)
 except Exception as e:
-    st.warning(f"Model loading error: {e}")
+    st.error(f"Error loading AI models: {e}")
+    summarizer = None
+    grammar_correction = None
 
 # Page Title
 st.title("University of Alabama Huntsville - Classroom Sentiment Analysis")
@@ -26,13 +32,20 @@ if data_file is not None:
     try:
         # Read and preprocess data
         df = pd.read_csv(data_file, encoding="utf-8")
+        
+        # Validate required columns
+        required_columns = {"Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"}
+        if not required_columns.issubset(df.columns):
+            st.error("CSV file is missing required columns.")
+            st.stop()
+
         df = df.dropna(subset=["Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"])
         df["Buildings Name"] = df["Buildings Name"].str.strip().str.title()
         df["Tell us about your classroom"] = df["Tell us about your classroom"].str.strip().str.lower()
         df["Latitude"] = pd.to_numeric(df["Latitude"], errors="coerce")
         df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
 
-        # Sentiment Analysis (handling empty values)
+        # Sentiment Analysis with safety check
         df["Sentiment Score"] = df["Tell us about your classroom"].apply(
             lambda x: sia.polarity_scores(x)["compound"] if isinstance(x, str) and x.strip() else 0
         )
@@ -46,14 +59,14 @@ if data_file is not None:
         # AI-based Summarization for each building
         def summarize_building(building):
             comments = df[df["Buildings Name"] == building]["Tell us about your classroom"].tolist()
-            text = " ".join(comments)[:512]  # Controlled truncation to avoid model overload
-            return summarizer(text, max_length=50, min_length=10, do_sample=False)[0]["summary_text"] if text else "No summary available."
+            text = " ".join(comments)[:512]  # Truncated to avoid overload
+            return summarizer(text, max_length=50, min_length=10, do_sample=False)[0]["summary_text"] if summarizer and text else "No summary available."
 
         df["Summary"] = df["Buildings Name"].apply(summarize_building)
 
         # Grammar correction and top quotes
         def correct_grammar(quote):
-            return grammar_correction(quote, max_length=100)[0]["generated_text"] if quote else "No data available"
+            return grammar_correction(quote, max_length=100)[0]["generated_text"] if grammar_correction and quote else "No data available"
 
         def get_top_quotes(building):
             building_data = df[df["Buildings Name"] == building]
