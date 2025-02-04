@@ -26,6 +26,9 @@ else:
     uploaded_file = st.session_state["uploaded_file"]
 
 if uploaded_file:
+    # Remove the upload file option from the interface
+    st.markdown("<style>.uploadedFile {display: none;}</style>", unsafe_allow_html=True)
+
     try:
         # Load Data
         df = pd.read_csv(uploaded_file, encoding="ISO-8859-1")
