@@ -26,7 +26,6 @@ else:
     uploaded_file = st.session_state["uploaded_file"]
 
 if uploaded_file:
-    # Hide upload option after file upload
     st.markdown("<style>.uploadedFile {display: none;}</style>", unsafe_allow_html=True)
 
     try:
@@ -38,7 +37,6 @@ if uploaded_file:
         if missing_columns:
             st.error(f"Missing required columns: {missing_columns}")
         else:
-            # Drop rows with invalid coordinates
             df = df.dropna(subset=["Latitude", "Longitude"])
 
             # Sentiment Analysis
@@ -47,7 +45,7 @@ if uploaded_file:
                 lambda x: sia.polarity_scores(x)["compound"] if pd.notnull(x) else 0
             )
 
-            df["Count"] = 1  # Response count for aggregation
+            df["Count"] = 1
 
             # Aggregate data by building
             building_summary = df.groupby("Buildings Name").agg(
@@ -107,22 +105,25 @@ if uploaded_file:
                 keywords = theme_keywords[selected_theme]
                 theme_data = df[df["Tell us about your classroom"].str.contains('|'.join(keywords), case=False, na=False)]
 
-                # Group data
-                grouped_theme_data = theme_data.groupby("Buildings Name").agg({
-                    "Avg_Sentiment": "mean",
-                    "Count": "sum"
-                }).reset_index()
+                if theme_data.empty:
+                    st.warning("No responses found for this theme.")
+                else:
+                    # Group data
+                    grouped_theme_data = theme_data.groupby("Buildings Name").agg({
+                        "Avg_Sentiment": "mean",
+                        "Count": "sum"
+                    }).reset_index()
 
-                grouped_theme_data["Sentiment"] = grouped_theme_data["Avg_Sentiment"].apply(
-                    lambda x: "🟢" if x > 0.2 else "🟠" if -0.2 <= x <= 0.2 else "🔴"
-                )
-                st.dataframe(grouped_theme_data[["Buildings Name", "Avg_Sentiment", "Count", "Sentiment"]], use_container_width=True)
+                    grouped_theme_data["Sentiment"] = grouped_theme_data["Avg_Sentiment"].apply(
+                        lambda x: "🟢" if x > 0.2 else "🟠" if -0.2 <= x <= 0.2 else "🔴"
+                    )
+                    st.dataframe(grouped_theme_data[["Buildings Name", "Avg_Sentiment", "Count", "Sentiment"]], use_container_width=True)
 
-                # **Key Responses**
-                st.markdown(f"<h3>Key Responses for '{selected_theme}'</h3>", unsafe_allow_html=True)
-                responses = [{"response": f"*{row['Tell us about your classroom']}*", "sentiment": "🟢" if row["Avg_Sentiment"] > 0.2 else "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"} for _, row in theme_data.iterrows()]
-                for res in responses[:6]:  
-                    st.markdown(f"{res['sentiment']} {res['response']}")
+                    # **Key Responses**
+                    st.markdown(f"<h3>Key Responses for '{selected_theme}'</h3>", unsafe_allow_html=True)
+                    responses = [{"response": f"*{row['Tell us about your classroom']}*", "sentiment": "🟢" if row["Avg_Sentiment"] > 0.2 else "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"} for _, row in theme_data.iterrows()]
+                    for res in responses[:6]:  
+                        st.markdown(f"{res['sentiment']} {res['response']}")
 
             # **SECTION 3: Sentiment Classification by Buildings (Tree Chart)**
             st.markdown("<h2>Sentiment Classification by Buildings</h2>", unsafe_allow_html=True)
