@@ -1,10 +1,11 @@
-# Import necessary libraries
+# Install necessary libraries
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from textblob import TextBlob
 import yake
 import nltk
+import chardet  # For encoding detection
 
 # Initialize NLTK
 nltk.download("stopwords")
@@ -39,6 +40,13 @@ def detect_themes(text):
         return ", ".join(detected_themes) if detected_themes else "No clear theme"
     return "No clear theme"
 
+# Function to detect encoding of the uploaded file
+def detect_encoding(file):
+    raw_data = file.read(1024)  # Read the first 1KB for detection
+    result = chardet.detect(raw_data)
+    file.seek(0)  # Reset file pointer after detection
+    return result["encoding"]
+
 # Main Streamlit app function
 def main():
     # App title
@@ -49,25 +57,11 @@ def main():
 
     if data_file is not None:
         try:
-            # Debug uploaded file
-            st.write("Uploaded file preview:")
-            st.write(data_file.getvalue().decode("utf-8")[:500])
+            # Detect encoding and read the file
+            encoding = detect_encoding(data_file)
+            st.write(f"Detected file encoding: {encoding}")
 
-            # Attempt to read the CSV file with fallback encoding
-            try:
-                df = pd.read_csv(data_file, encoding="utf-8")
-            except UnicodeDecodeError:
-                df = pd.read_csv(data_file, encoding="ISO-8859-1")
-            
-            # Check if the dataframe is empty
-            if df.empty:
-                st.error("The uploaded file is empty or contains no data.")
-                st.stop()
-
-            # Check if columns are present
-            if df.columns.size == 0:
-                st.error("The uploaded file has no columns to parse. Please check the file format.")
-                st.stop()
+            df = pd.read_csv(data_file, encoding=encoding)
 
             # Validate required columns
             required_columns = {"Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"}
