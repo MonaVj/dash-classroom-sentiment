@@ -47,16 +47,17 @@ def main():
     # Upload CSV File
     data_file = st.file_uploader("Upload Classroom Data CSV", type=["csv"])
 
-    if data_file is not None:
-        try:
-            # Read and preprocess data
-           df = pd.read_csv(data_file, encoding="utf-8")
+  if data_file is not None:
+    try:
+        # Read and preprocess data
+        df = pd.read_csv(data_file, encoding="utf-8")  # Remove invalid 'errors' argument
 
-            # Validate required columns
-            required_columns = {"Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"}
-            if not required_columns.issubset(df.columns):
-                st.error("CSV file is missing required columns.")
-                st.stop()
+        # Validate required columns
+        required_columns = {"Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"}
+        if not required_columns.issubset(df.columns):
+            st.error("CSV file is missing required columns.")
+            st.stop()
+
 
             # Data Cleaning
             df = df.dropna(subset=["Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"])
