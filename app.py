@@ -16,7 +16,7 @@ device = 0 if torch.cuda.is_available() else -1  # Use GPU if available, else CP
 # Load AI models with error handling
 try:
     summarizer = pipeline("summarization", model="facebook/bart-large-cnn", device=device)
-    grammar_correction = pipeline("text2text-generation", model="textattack/roberta-base-CoLA", device=device)
+    grammar_correction = pipeline("text2text-generation", model="prithivida/grammar_error_correcter_v1", device=device)
 except Exception as e:
     st.error(f"Error loading AI models: {e}")
     summarizer = None
