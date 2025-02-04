@@ -7,7 +7,7 @@ from transformers import pipeline
 
 # Load and preprocess data
 data_file = 'Merged_Classroom_Data_with_Location_Count.csv'
-df = pd.read_csv(data_file)
+df = pd.read_csv(data_file, encoding='utf-8')  # Use 'utf-8-sig' if 'utf-8' doesn't work
 df = df.dropna(subset=["Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"])
 df["Buildings Name"] = df["Buildings Name"].str.strip().str.title()
 df["Tell us about your classroom"] = df["Tell us about your classroom"].str.strip().str.lower()
