@@ -18,30 +18,32 @@ def correct_grammar(text):
         return str(TextBlob(text).correct())
     return text
 
-# Function to get top quotes
-def get_top_quotes(data, top_n=3):
-    data = data.sort_values(by="Sentiment Score", ascending=False)
-    top_quotes = data.head(top_n)[["Corrected Response", "Sentiment Score"]]
-    return top_quotes
-
-# Function to add color-coded sentiment dots
-def get_sentiment_color(score):
+# Function to calculate sentiment and assign color
+def get_sentiment_label_and_color(score):
     if score > 0.2:
-        return "🟢"  # Positive sentiment
+        return "🟢 Positive"
     elif score < -0.2:
-        return "🔴"  # Negative sentiment
+        return "🔴 Negative"
     else:
-        return "🟠"  # Neutral sentiment
+        return "🟠 Neutral"
+
+# Function to display key quotes
+def display_key_quotes(building_data):
+    st.write("### Key Quotes from Students:")
+    sorted_data = building_data.sort_values(by="Sentiment Score", ascending=False)
+    for _, row in sorted_data.iterrows():
+        sentiment_label = get_sentiment_label_and_color(row["Sentiment Score"])
+        st.markdown(f"{sentiment_label} **{row['Corrected Response']}**")
 
 # Main Streamlit app function
 def main():
-    # Set up the page configuration
+    # Set up page configuration
     st.set_page_config(page_title="Classroom Sentiment Dashboard", layout="wide")
 
     # Header Section
     st.title("📚 Classroom Sentiment and Theme Dashboard")
     st.markdown("""
-        Analyze classroom sentiment and discover insights from your data. Upload your dataset, explore the interactive map, and view trends in building preferences!
+        Analyze classroom sentiment and themes. Upload your dataset, explore insights, and discover trends!
     """)
 
     # File upload
@@ -80,64 +82,56 @@ def main():
                 Count=("Corrected Response", "count")
             ).reset_index()
 
-            # Layout with map and treemap
-            col1, col2 = st.columns([2, 1])
+            # Overall Sentiment Analysis Map
+            st.subheader("🗺️ Overall Sentiment Analysis of Classrooms By Building")
+            map_center = [building_sentiments["Latitude"].mean(), building_sentiments["Longitude"].mean()]
+            m = folium.Map(location=map_center, zoom_start=15)
 
-            # Left column: Sentiment Map
-            with col1:
-                st.subheader("🗺️ Sentiment Map")
-                map_center = [building_sentiments["Latitude"].mean(), building_sentiments["Longitude"].mean()]
-                m = folium.Map(location=map_center, zoom_start=15)
+            for _, row in building_sentiments.iterrows():
+                sentiment = row["Average_Sentiment"]
+                color = "green" if sentiment > 0.2 else "red" if sentiment < -0.2 else "orange"
+                popup_text = f"""
+                <b>{row['Buildings Name']}</b><br>
+                <b>Avg Sentiment:</b> {row['Average_Sentiment']:.2f} | <b>Responses:</b> {row['Count']}
+                """
+                folium.CircleMarker(
+                    location=[row["Latitude"], row["Longitude"]],
+                    radius=8,
+                    popup=popup_text,
+                    color=color,
+                    fill=True,
+                    fill_color=color,
+                    fill_opacity=0.7
+                ).add_to(m)
 
-                # Add building points with color based on sentiment
-                for _, row in building_sentiments.iterrows():
-                    sentiment = row["Average_Sentiment"]
-                    color = "green" if sentiment > 0.2 else "red" if sentiment < -0.2 else "orange"
-                    popup_text = f"""
-                    <b>{row['Buildings Name']}</b><br>
-                    <b>Avg Sentiment:</b> {row['Average_Sentiment']:.2f} | <b>Responses:</b> {row['Count']}
-                    """
-                    folium.CircleMarker(
-                        location=[row["Latitude"], row["Longitude"]],
-                        radius=8,
-                        popup=popup_text,
-                        color=color,
-                        fill=True,
-                        fill_color=color,
-                        fill_opacity=0.7
-                    ).add_to(m)
+            folium_static(m)
 
-                folium_static(m)
+            # Sentiment Treemap
+            st.subheader("📊 Click on the Building to Learn More")
+            treemap_fig = px.treemap(
+                building_sentiments,
+                path=["Buildings Name"],
+                values="Count",
+                color="Average_Sentiment",
+                color_continuous_scale=["red", "orange", "green"],
+                title="Building Sentiment Treemap",
+            )
+            treemap_fig.update_layout(margin=dict(t=25, l=0, r=0, b=0))
+            selected_building = st.selectbox(
+                "Select a Building for Details (Click Treemap for Suggestions):",
+                building_sentiments["Buildings Name"],
+            )
+            st.plotly_chart(treemap_fig, use_container_width=True)
 
-            # Right column: Treemap
-            with col2:
-                st.subheader("📊 Sentiment Treemap")
-                treemap_fig = px.treemap(
-                    building_sentiments,
-                    path=["Buildings Name"],
-                    values="Count",
-                    color="Average_Sentiment",
-                    color_continuous_scale=["red", "orange", "green"],
-                    title="Building Sentiment Treemap",
-                )
-                treemap_fig.update_layout(margin=dict(t=25, l=0, r=0, b=0))
-                st.plotly_chart(treemap_fig, use_container_width=True)
-
-            # Detailed Analysis
-            st.subheader("🏛️ Detailed Building Analysis")
-            selected_building = st.selectbox("Select a Building for Analysis:", building_sentiments["Buildings Name"])
-
+            # Display Detailed Building Analysis
             if selected_building:
                 building_data = df[df["Buildings Name"] == selected_building]
-                st.write(f"### {selected_building}")
+                st.subheader(f"🏛️ Details for {selected_building}")
                 st.write(f"**Average Sentiment Score:** {building_sentiments[building_sentiments['Buildings Name'] == selected_building]['Average_Sentiment'].values[0]:.2f}")
                 st.write(f"**Total Responses:** {len(building_data)}")
 
-                # Top Quotes Section
-                st.write("### Top Quotes:")
-                top_quotes = get_top_quotes(building_data)
-                for _, row in top_quotes.iterrows():
-                    st.markdown(f"{get_sentiment_color(row['Sentiment Score'])} **{row['Corrected Response']}**")
+                # Display Key Quotes
+                display_key_quotes(building_data)
 
         except Exception as e:
             st.error(f"Error processing file: {e}")
