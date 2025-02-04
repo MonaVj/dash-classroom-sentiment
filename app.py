@@ -101,29 +101,25 @@ if uploaded_file:
             themes = list(theme_keywords.keys())
             selected_theme = st.radio("Select a Theme to Explore:", themes, index=0)
 
-            if selected_theme:
-                keywords = theme_keywords[selected_theme]
-                theme_data = df[df["Tell us about your classroom"].str.contains('|'.join(keywords), case=False, na=False)]
+            theme_data = df[df["Tell us about your classroom"].str.contains('|'.join(theme_keywords[selected_theme]), case=False, na=False)]
 
-                if theme_data.empty:
-                    st.warning("No responses found for this theme.")
-                else:
-                    # Group data
-                    grouped_theme_data = theme_data.groupby("Buildings Name").agg({
-                        "Avg_Sentiment": "mean",
-                        "Count": "sum"
-                    }).reset_index()
+            if theme_data.empty:
+                st.warning("No responses found for this theme.")
+            else:
+                grouped_theme_data = theme_data.groupby("Buildings Name").agg({
+                    "Avg_Sentiment": "mean",
+                    "Count": "sum"
+                }).reset_index()
 
-                    grouped_theme_data["Sentiment"] = grouped_theme_data["Avg_Sentiment"].apply(
-                        lambda x: "🟢" if x > 0.2 else "🟠" if -0.2 <= x <= 0.2 else "🔴"
-                    )
-                    st.dataframe(grouped_theme_data[["Buildings Name", "Avg_Sentiment", "Count", "Sentiment"]], use_container_width=True)
+                grouped_theme_data["Sentiment"] = grouped_theme_data["Avg_Sentiment"].apply(
+                    lambda x: "🟢" if x > 0.2 else "🟠" if -0.2 <= x <= 0.2 else "🔴"
+                )
+                st.dataframe(grouped_theme_data[["Buildings Name", "Avg_Sentiment", "Count", "Sentiment"]], use_container_width=True)
 
-                    # **Key Responses**
-                    st.markdown(f"<h3>Key Responses for '{selected_theme}'</h3>", unsafe_allow_html=True)
-                    responses = [{"response": f"*{row['Tell us about your classroom']}*", "sentiment": "🟢" if row["Avg_Sentiment"] > 0.2 else "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"} for _, row in theme_data.iterrows()]
-                    for res in responses[:6]:  
-                        st.markdown(f"{res['sentiment']} {res['response']}")
+                st.markdown(f"<h3>Key Responses for '{selected_theme}'</h3>", unsafe_allow_html=True)
+                responses = [{"response": f"*{row['Tell us about your classroom']}*", "sentiment": "🟢" if row["Avg_Sentiment"] > 0.2 else "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"} for _, row in theme_data.iterrows()]
+                for res in responses[:6]:  
+                    st.markdown(f"{res['sentiment']} {res['response']}")
 
             # **SECTION 3: Sentiment Classification by Buildings (Tree Chart)**
             st.markdown("<h2>Sentiment Classification by Buildings</h2>", unsafe_allow_html=True)
