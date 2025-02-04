@@ -1,19 +1,12 @@
-import dash
-from dash import dcc, html, Input, Output
+import streamlit as st
 import pandas as pd
 import plotly.express as px
 import nltk
 from nltk.sentiment import SentimentIntensityAnalyzer
-import re
 from transformers import pipeline
-
-# Initialize Dash app
-app = dash.Dash(__name__)
-app.title = "Classroom Sentiment Analysis"
 
 # Load and preprocess data
 data_file = 'Merged_Classroom_Data_with_Location_Count.csv'
-
 df = pd.read_csv(data_file)
 df = df.dropna(subset=["Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"])
 df["Buildings Name"] = df["Buildings Name"].str.strip().str.title()
@@ -34,10 +27,7 @@ df["Sentiment Score"] = df["Tell us about your classroom"].apply(calculate_senti
 themes = ["spacious", "lighting", "comfort", "accessibility", "collaborative"]
 
 def assign_themes(comment):
-    assigned_themes = []
-    for theme in themes:
-        if theme in comment:
-            assigned_themes.append(theme)
+    assigned_themes = [theme for theme in themes if theme in comment]
     return ", ".join(assigned_themes)
 
 df["Themes"] = df["Tell us about your classroom"].apply(assign_themes)
@@ -56,81 +46,41 @@ def generate_summary(building):
 
 df["Summary"] = df["Buildings Name"].apply(generate_summary)
 
-# Aggregate building data
-building_summary = df.groupby("Buildings Name").agg({
-    "Sentiment Score": "mean",
-    "Tell us about your classroom": "count",
-    "Themes": lambda x: ', '.join(set(", ".join(x).split(', '))),
-    "Summary": "first"
-}).reset_index()
+# Streamlit Application Layout
+st.title("University of Alabama Huntsville - Classroom Sentiment Analysis")
 
-building_summary.rename(columns={"Tell us about your classroom": "Count"}, inplace=True)
+st.sidebar.header("Filter Options")
+selected_building = st.sidebar.selectbox("Select a building", options=df["Buildings Name"].unique())
 
-# Layout
-dropdown_options = [{'label': b, 'value': b} for b in building_summary["Buildings Name"].unique()]
+if selected_building:
+    building_data = df[df["Buildings Name"] == selected_building]
+    st.subheader(f"Details for {selected_building}")
+    st.write(f"Average Sentiment Score: {building_data['Sentiment Score'].mean():.2f}")
+    st.write(f"Total Responses: {len(building_data)}")
+    st.write(f"Themes Highlighted: {', '.join(building_data['Themes'].unique())}")
+    st.write(f"Summary: {generate_summary(selected_building)}")
 
-app.layout = html.Div([
-    html.H1("University of Alabama Huntsville - Classroom Sentiment Analysis", style={'textAlign': 'center'}),
-    
-    dcc.Graph(id='map'),
-    
-    dcc.Dropdown(id='building-dropdown', options=dropdown_options, placeholder="Select a building"),
-    
-    html.Div(id='building-details', style={"marginTop": "20px"}),
-    
-    dcc.Graph(id='treemap', style={"marginTop": "20px"}),
-    
-    html.Div([
-        html.H3("Filter by Theme:"),
-        html.Div([
-            html.Button(theme.capitalize(), id=f"theme-{theme}", n_clicks=0, style={"marginRight": "10px"})
-            for theme in themes
-        ], style={"marginBottom": "20px"}),
-        html.Div(id="theme-filter-results")
-    ])
-])
-
-# Callbacks
-@app.callback(
-    Output('map', 'figure'),
-    [Input('building-dropdown', 'value')]
+# Plotting
+st.subheader("Classroom Sentiment Heatmap")
+fig = px.scatter_mapbox(
+    df,
+    lat="Latitude",
+    lon="Longitude",
+    color="Sentiment Score",
+    hover_name="Buildings Name",
+    hover_data={"Sentiment Score": ":.2f", "Themes": True},
+    color_continuous_scale="RdYlGn",
+    title="Sentiment Scores by Classroom Location",
+    zoom=15
 )
-def update_map(selected_building):
-    filtered_df = df if not selected_building else df[df["Buildings Name"] == selected_building]
-    map_fig = px.scatter_mapbox(
-        filtered_df,
-        lat="Latitude",
-        lon="Longitude",
-        color="Sentiment Score",
-        hover_name="Buildings Name",
-        hover_data={"Sentiment Score": ":.2f", "Themes": True},
-        color_continuous_scale="RdYlGn",
-        title="Sentiment Scores by Classroom Location",
-        zoom=15
-    )
-    map_fig.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
-    return map_fig
+fig.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
+st.plotly_chart(fig)
 
-@app.callback(
-    Output('building-details', 'children'),
-    [Input('building-dropdown', 'value')]
-)
-def update_building_details(selected_building):
-    if not selected_building:
-        return "Select a building to see details."
-    
-    building_data = building_summary[building_summary["Buildings Name"] == selected_building]
-    if building_data.empty:
-        return "No data available for the selected building."
-    
-    building_info = building_data.iloc[0]
-    return html.Div([
-        html.H3(f"Details for {selected_building}"),
-        html.P(f"Average Sentiment Score: {building_info['Sentiment Score']:.2f}"),
-        html.P(f"Total Responses: {building_info['Count']}"),
-        html.P(f"Themes Highlighted: {building_info['Themes']}"),
-        html.P(f"Summary: {building_info['Summary']}")
-    ])
-
-if __name__ == '__main__':
-    app.run_server(debug=True)
+# Display quotes
+st.subheader("Student Comments by Building")
+for theme in themes:
+    with st.expander(f"Theme: {theme.capitalize()}"):
+        theme_comments = df[df["Themes"].str.contains(theme, na=False)]
+        for _, row in theme_comments.iterrows():
+            color = "green" if row["Sentiment Score"] > 0 else "red"
+            st.markdown(f"<p style='color:{color}'>{row['Tell us about your classroom']}</p>", unsafe_allow_html=True)
