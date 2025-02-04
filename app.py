@@ -1,16 +1,15 @@
-
 # Import necessary libraries
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import nltk
 from textblob import TextBlob
 import yake
+import nltk
 
 # Initialize NLTK
 nltk.download("stopwords")
 
-# Define themes and associated words
+# Define themes and associated keywords
 THEME_DICT = {
     "Spacious": ["spacious", "large", "open", "airy", "big"],
     "Lighting": ["bright", "dark", "lighting", "sunlight", "dim"],
@@ -19,18 +18,18 @@ THEME_DICT = {
     "Collaborative": ["teamwork", "group", "interactive", "discussion"],
 }
 
-# Function to correct grammar and reframe sentence
+# Function to correct grammar and reframe sentences
 def correct_sentence(text):
     if isinstance(text, str):
         return str(TextBlob(text).correct())
-    return text  # Return original if not a valid string
+    return text
 
 # Function to extract keywords using YAKE
 def extract_keywords(text, num_keywords=5):
     if isinstance(text, str):
         kw_extractor = yake.KeywordExtractor(lan="en", n=1, dedupLim=0.9, top=num_keywords)
         keywords = kw_extractor.extract_keywords(text)
-        return ", ".join([kw[0] for kw in keywords])  # Extract keywords only
+        return ", ".join([kw[0] for kw in keywords])
     return ""
 
 # Function to detect themes
@@ -40,26 +39,26 @@ def detect_themes(text):
         return ", ".join(detected_themes) if detected_themes else "No clear theme"
     return "No clear theme"
 
-# Streamlit UI
+# Main Streamlit app function
 def main():
+    # App title
     st.title("Classroom Sentiment Analysis")
 
     # Upload CSV File
     data_file = st.file_uploader("Upload Classroom Data CSV", type=["csv"])
 
-  if data_file is not None:
-    try:
-        # Read and preprocess data
-        df = pd.read_csv(data_file, encoding="utf-8")  # Remove invalid 'errors' argument
+    if data_file is not None:
+        try:
+            # Read the CSV file
+            df = pd.read_csv(data_file, encoding="utf-8")
 
-        # Validate required columns
-        required_columns = {"Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"}
-        if not required_columns.issubset(df.columns):
-            st.error("CSV file is missing required columns.")
-            st.stop()
+            # Validate required columns
+            required_columns = {"Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"}
+            if not required_columns.issubset(df.columns):
+                st.error("CSV file is missing required columns.")
+                st.stop()
 
-
-            # Data Cleaning
+            # Preprocess data
             df = df.dropna(subset=["Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"])
             df["Buildings Name"] = df["Buildings Name"].str.strip().str.title()
             df["Tell us about your classroom"] = df["Tell us about your classroom"].str.strip().str.lower()
@@ -79,7 +78,7 @@ def main():
                 lon="Longitude",
                 hover_name="Buildings Name",
                 hover_data={"Themes": True, "Corrected Response": True},
-                color_continuous_scale=px.colors.diverging.RdYlGn,
+                color_discrete_sequence=["blue"],
                 title="Classroom Feedback Map",
                 zoom=12,
             )
@@ -110,6 +109,6 @@ def main():
         except Exception as e:
             st.error(f"Error processing file: {e}")
 
-# Run the main function
+# Run the app
 if __name__ == "__main__":
     main()
