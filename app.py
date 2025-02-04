@@ -13,8 +13,8 @@ st.set_page_config(
 # Title
 st.markdown("<h1 style='text-align: center;'>University of Alabama, Huntsville Engagement Analysis</h1>", unsafe_allow_html=True)
 
-# Section 1: Overall Sentiment Map
-st.markdown("<h2 style='margin-top: 30px;'>Section 1: Overall Sentiment Map</h2>", unsafe_allow_html=True)
+# Overall Sentiment Map
+st.markdown("<h2 style='margin-top: 30px;'>Overall Sentiment Map</h2>", unsafe_allow_html=True)
 
 # Create columns for map and legend
 col1, col2 = st.columns([3, 1])  # Map takes 3/4 of the space, legend takes 1/4
@@ -38,8 +38,8 @@ with col2:
     <p><strong>Total Responses:</strong> 950</p>
     """, unsafe_allow_html=True)
 
-# Section 2: Explore Emerging Themes and Responses
-st.markdown("<h2 style='margin-top: 30px;'>Section 2: Explore Emerging Themes and Responses</h2>", unsafe_allow_html=True)
+# Explore Emerging Themes and Responses
+st.markdown("<h2 style='margin-top: 30px;'>Explore Emerging Themes and Responses</h2>", unsafe_allow_html=True)
 
 # Create theme selection
 themes = ["Spacious", "Lighting", "Comfort", "Accessibility", "Collaborative"]
@@ -67,8 +67,8 @@ if selected_theme:
     for res in responses[:3]:  # Show only 3-5 responses
         st.markdown(f"<p>{res['sentiment']} <em>{res['response']}</em></p>", unsafe_allow_html=True)
 
-# Section 3: Sentiment Classification by Buildings
-st.markdown("<h2 style='margin-top: 30px;'>Section 3: Sentiment Classification by Buildings</h2>", unsafe_allow_html=True)
+# Sentiment Classification by Buildings
+st.markdown("<h2 style='margin-top: 30px;'>Sentiment Classification by Buildings</h2>", unsafe_allow_html=True)
 
 # Example Treemap
 building_summary = {
