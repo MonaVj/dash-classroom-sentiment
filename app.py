@@ -50,7 +50,7 @@ def main():
     if data_file is not None:
         try:
             # Read and preprocess data
-            df = pd.read_csv(data_file, encoding="utf-8", errors="ignore")
+           df = pd.read_csv(data_file, encoding="utf-8")
 
             # Validate required columns
             required_columns = {"Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"}
