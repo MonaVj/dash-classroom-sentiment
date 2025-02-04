@@ -26,7 +26,6 @@ else:
     uploaded_file = st.session_state["uploaded_file"]
 
 if uploaded_file:
-    # Remove upload option once a file is uploaded
     st.markdown("<style>.uploadedFile {display: none;}</style>", unsafe_allow_html=True)
 
     try:
@@ -39,14 +38,14 @@ if uploaded_file:
         if missing_columns:
             st.error(f"The following required columns are missing: {missing_columns}")
         else:
-            # Preprocessing
+            # Preprocess
             df.dropna(subset=["Latitude", "Longitude"], inplace=True)
             sia = SentimentIntensityAnalyzer()
             if "Avg_Sentiment" not in df.columns:
                 df["Avg_Sentiment"] = df["Tell us about your classroom"].apply(
                     lambda x: sia.polarity_scores(x)["compound"] if pd.notnull(x) else 0
                 )
-            df["Count"] = df.get("Count", 1)
+            df["Count"] = 1
 
             # Aggregate by building
             building_summary = df.groupby("Buildings Name").agg(
@@ -56,7 +55,7 @@ if uploaded_file:
                 Count=("Count", "sum"),
             ).reset_index()
 
-            # Section 1: Sentiment Analysis Map
+            # Section 1: Map
             st.markdown(
                 "<h2 style='margin-top: 30px;'>Overall Sentiment Analysis of Classroom Spaces by Buildings</h2>",
                 unsafe_allow_html=True,
@@ -90,7 +89,7 @@ if uploaded_file:
                 st.markdown("🔴 Negative (< -0.2)")
                 st.markdown(f"**Total Responses:** {len(df)}")
 
-            # Section 2: Explore Themes
+            # Section 2: Themes and Responses
             st.markdown("<h2 style='margin-top: 30px;'>Explore Emerging Themes and Responses</h2>", unsafe_allow_html=True)
 
             theme_keywords = {
@@ -108,6 +107,7 @@ if uploaded_file:
                 st.markdown(f"<h3>Buildings Mentioning '{selected_theme}'</h3>", unsafe_allow_html=True)
                 keywords = theme_keywords[selected_theme]
                 theme_data = df[df["Tell us about your classroom"].str.contains('|'.join(keywords), case=False, na=False)]
+
                 grouped_theme_data = theme_data.groupby("Buildings Name").agg(
                     Avg_Sentiment=("Avg_Sentiment", "mean"),
                     Count=("Count", "sum"),
@@ -128,8 +128,15 @@ if uploaded_file:
                         "sentiment": sentiment_icon,
                         "score": row["Avg_Sentiment"]
                     })
-                responses_sorted = sorted(responses, key=lambda x: x["score"], reverse=True)
-                for res in responses_sorted[:5]:
+
+                # Balance responses by sentiment type
+                positive = [r for r in responses if r["score"] > 0.2]
+                neutral = [r for r in responses if -0.2 <= r["score"] <= 0.2]
+                negative = [r for r in responses if r["score"] < -0.2]
+                balanced_responses = positive[:2] + neutral[:2] + negative[:1]  # Adjust balance here
+                balanced_responses_sorted = sorted(balanced_responses, key=lambda x: x["score"], reverse=True)
+
+                for res in balanced_responses_sorted:
                     st.markdown(f"{res['sentiment']} {res['response']}")
 
             # Section 3: Treemap
