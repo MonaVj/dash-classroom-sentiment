@@ -1,120 +1,101 @@
 # Import necessary libraries
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-from textblob import TextBlob
-import yake
+import folium
+from streamlit_folium import folium_static
 import nltk
+from nltk.sentiment import SentimentIntensityAnalyzer
+from textblob import TextBlob
 
 # Initialize NLTK
-nltk.download("stopwords")
+nltk.download('vader_lexicon')
+sia = SentimentIntensityAnalyzer()
 
-# Define themes and associated keywords
-THEME_DICT = {
-    "Spacious": ["spacious", "large", "open", "airy", "big"],
-    "Lighting": ["bright", "dark", "lighting", "sunlight", "dim"],
-    "Comfort": ["comfortable", "seats", "warm", "cozy", "cold", "ac", "ventilation"],
-    "Accessibility": ["stairs", "wheelchair", "elevator", "distance", "accessible"],
-    "Collaborative": ["teamwork", "group", "interactive", "discussion"],
-}
+# App title
+st.title("Campus Classroom Sentiment Dashboard")
 
-# Function to correct grammar and reframe sentences
-def correct_sentence(text):
-    if isinstance(text, str):
-        return str(TextBlob(text).correct())
-    return text
+# File upload
+data_file = st.file_uploader("Upload Classroom Data CSV", type=["csv"])
 
-# Function to extract keywords using YAKE
-def extract_keywords(text, num_keywords=5):
-    if isinstance(text, str):
-        kw_extractor = yake.KeywordExtractor(lan="en", n=1, dedupLim=0.9, top=num_keywords)
-        keywords = kw_extractor.extract_keywords(text)
-        return ", ".join([kw[0] for kw in keywords])
-    return ""
+if data_file is not None:
+    try:
+        # Read the file with fixed encoding
+        df = pd.read_csv(data_file, encoding="ISO-8859-1")
+        
+        # Check for required columns
+        required_columns = {"Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"}
+        if not required_columns.issubset(df.columns):
+            st.error("CSV file is missing one or more required columns.")
+            st.stop()
 
-# Function to detect themes
-def detect_themes(text):
-    if isinstance(text, str):
-        detected_themes = [theme for theme, words in THEME_DICT.items() if any(word in text.lower() for word in words)]
-        return ", ".join(detected_themes) if detected_themes else "No clear theme"
-    return "No clear theme"
+        # Preprocess data
+        df = df.drop_duplicates()
+        df = df.dropna(subset=["Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"])
+        df["Buildings Name"] = df["Buildings Name"].str.strip().str.title()
+        df["Tell us about your classroom"] = df["Tell us about your classroom"].str.strip()
 
-# Main Streamlit app function
-def main():
-    # App title
-    st.title("Classroom Sentiment Analysis")
+        # Grammar correction
+        def correct_grammar(text):
+            if isinstance(text, str):
+                return str(TextBlob(text).correct())
+            return text
 
-    # File upload
-    data_file = st.file_uploader("Upload Classroom Data CSV", type=["csv"])
-    
-    if data_file is not None:
-        try:
-            # Attempt to read the file with utf-8 encoding, fallback to ISO-8859-1
-            try:
-                df = pd.read_csv(data_file, encoding="utf-8", errors="ignore")
-            except UnicodeDecodeError:
-                df = pd.read_csv(data_file, encoding="ISO-8859-1", errors="ignore")
+        df["Corrected Response"] = df["Tell us about your classroom"].apply(correct_grammar)
 
-            # Check for required columns
-            required_columns = {"Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"}
-            if not required_columns.issubset(df.columns):
-                st.error("CSV file is missing one or more required columns.")
-                st.stop()
+        # Sentiment analysis
+        df["Sentiment Score"] = df["Corrected Response"].apply(
+            lambda text: sia.polarity_scores(text)["compound"] if isinstance(text, str) else 0
+        )
 
-            # Preprocess data
-            df = df.dropna(subset=["Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"])
-            df["Buildings Name"] = df["Buildings Name"].str.strip().str.title()
-            df["Tell us about your classroom"] = df["Tell us about your classroom"].str.strip().str.lower()
-            df["Latitude"] = pd.to_numeric(df["Latitude"], errors="coerce")
-            df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
+        # Aggregate sentiment scores at the building level
+        building_sentiments = df.groupby("Buildings Name").agg(
+            Latitude=("Latitude", "mean"),
+            Longitude=("Longitude", "mean"),
+            Average_Sentiment=("Sentiment Score", "mean"),
+            Count=("Corrected Response", "count")
+        ).reset_index()
 
-            # Apply transformations
-            st.write("Processing data...")
-            df["Corrected Response"] = df["Tell us about your classroom"].apply(correct_sentence)
-            df["Extracted Keywords"] = df["Tell us about your classroom"].apply(extract_keywords)
-            df["Themes"] = df["Tell us about your classroom"].apply(detect_themes)
+        # Visualization: Color-Coded Sentiment Map
+        st.subheader("Sentiment Map by Building")
+        map_center = [building_sentiments["Latitude"].mean(), building_sentiments["Longitude"].mean()]
+        m = folium.Map(location=map_center, zoom_start=15)
 
-            # Visualization: Map
-            st.header("Sentiment Map")
-            map_fig = px.scatter_mapbox(
-                df,
-                lat="Latitude",
-                lon="Longitude",
-                hover_name="Buildings Name",
-                hover_data={"Themes": True, "Corrected Response": True},
-                color_discrete_sequence=["blue"],
-                title="Classroom Feedback Map",
-                zoom=12,
-            )
-            map_fig.update_layout(
-                mapbox_style="open-street-map",
-                margin={"r": 0, "t": 0, "l": 0, "b": 0}
-            )
-            st.plotly_chart(map_fig)
+        # Add building points with color based on sentiment
+        for _, row in building_sentiments.iterrows():
+            sentiment = row["Average_Sentiment"]
+            color = "green" if sentiment > 0.2 else "red" if sentiment < -0.2 else "orange"
+            popup_text = f"Building: {row['Buildings Name']}<br>Avg Sentiment: {sentiment:.2f}<br>Responses: {row['Count']}"
+            folium.CircleMarker(
+                location=[row["Latitude"], row["Longitude"]],
+                radius=8,
+                popup=popup_text,
+                color=color,
+                fill=True,
+                fill_color=color,
+                fill_opacity=0.7
+            ).add_to(m)
 
-            # Building details
-            st.header("Building Details")
-            selected_building = st.selectbox("Select a Building", df["Buildings Name"].unique())
-            if selected_building:
-                building_data = df[df["Buildings Name"] == selected_building]
-                themes_highlighted = ", ".join(building_data["Themes"].unique())
-                corrected_responses = "\n".join(building_data["Corrected Response"].tolist())
+        folium_static(m)
 
-                st.subheader(f"Details for {selected_building}")
-                st.write(f"**Themes Highlighted:** {themes_highlighted}")
-                st.text_area("Corrected Responses", corrected_responses, height=200)
+        # Display building sentiment summary
+        st.subheader("Building Sentiment Summary")
+        st.dataframe(building_sentiments)
 
-            # Filter by themes
-            st.header("Filter by Themes")
-            theme_selected = st.radio("Select a Theme", list(THEME_DICT.keys()))
-            if theme_selected:
-                filtered_data = df[df["Themes"].str.contains(theme_selected, na=False)]
-                st.write(f"Buildings mentioning '{theme_selected}':")
-                st.dataframe(filtered_data[["Buildings Name", "Themes", "Corrected Response"]])
+        # Detailed Analysis for Selected Building
+        st.subheader("Detailed Analysis")
+        selected_building = st.selectbox("Select a Building for Analysis:", building_sentiments["Buildings Name"])
 
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
+        if selected_building:
+            building_data = df[df["Buildings Name"] == selected_building]
+            st.write(f"### Details for {selected_building}")
+            st.write(f"**Average Sentiment Score:** {building_sentiments[building_sentiments['Buildings Name'] == selected_building]['Average_Sentiment'].values[0]:.2f}")
+            st.write(f"**Total Responses:** {len(building_data)}")
 
-# Run the app
-if __name__ == "__main__":
-    main()
+            st.write("### Corrected Responses:")
+            for response in building_data["Corrected Response"].tolist():
+                st.write(f"- {response}")
+
+    except Exception as e:
+        st.error(f"Error processing file: {e}")
+else:
+    st.warning("Please upload a CSV file to proceed.")
