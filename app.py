@@ -2,153 +2,100 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import folium_static
-from nltk.sentiment import SentimentIntensityAnalyzer
-import nltk
+import plotly.express as px
 
-# Download necessary NLTK data
-nltk.download("vader_lexicon")
-
-# Set up page configuration
+# Page Configuration
 st.set_page_config(
-    page_title="University of Alabama, Huntsville: Engagement Analysis",
-    layout="wide",
+    page_title="University of Alabama, Huntsville Engagement Analysis",
+    layout="wide"
 )
 
-# App Title
-st.title("University of Alabama, Huntsville: Engagement Analysis")
+# Title
+st.markdown("<h1 style='text-align: center;'>University of Alabama, Huntsville Engagement Analysis</h1>", unsafe_allow_html=True)
 
-# File Upload Section
-st.subheader("Upload your dataset (CSV format)")
-uploaded_file = st.file_uploader("Drag and drop file here", type=["csv"])
+# Overall Sentiment Map
+st.markdown("<h2 style='margin-top: 30px;'>Overall Sentiment Map</h2>", unsafe_allow_html=True)
 
-# Functions to load and process data
-@st.cache_data
-def load_data(uploaded_file):
-    # Load the CSV file
-    df = pd.read_csv(uploaded_file, encoding="ISO-8859-1")
-    
-    # Drop rows with missing latitude or longitude
-    df = df.dropna(subset=["Latitude", "Longitude"])
-    
-    # Ensure numeric conversion for latitude and longitude
-    df["Latitude"] = pd.to_numeric(df["Latitude"], errors="coerce")
-    df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
-    df = df.dropna(subset=["Latitude", "Longitude"])
-    
-    return df
+# Create columns for map and legend
+col1, col2 = st.columns([3, 1])  # Map takes 3/4 of the space, legend takes 1/4
+with col1:
+    # Display the map
+    st.markdown("<h3>Sentiment Map</h3>", unsafe_allow_html=True)
 
-@st.cache_data
-def analyze_sentiments(data):
-    # Sentiment analysis using VADER
-    sia = SentimentIntensityAnalyzer()
-    data["Sentiment"] = data["Tell us about your classroom"].apply(
-        lambda x: sia.polarity_scores(str(x))["compound"]
-    )
-    return data
+    # Example Folium map
+    sentiment_map = folium.Map(location=[34.728, -86.639], zoom_start=15)
+    folium_static(sentiment_map, width=800, height=500)  # Adjusted map width and height
 
-if uploaded_file:
-    try:
-        # Load and process the data
-        df = load_data(uploaded_file)
-        df = analyze_sentiments(df)
+with col2:
+    # Display the legend
+    st.markdown("<h3 style='margin-top: 20px;'>Legend</h3>", unsafe_allow_html=True)
+    st.markdown("""
+    <ul>
+        <li><span style='color: green;'>🟢 Positive (> 0.2)</span></li>
+        <li><span style='color: orange;'>🟠 Neutral (-0.2 to 0.2)</span></li>
+        <li><span style='color: red;'>🔴 Negative (< -0.2)</span></li>
+    </ul>
+    <p><strong>Total Responses:</strong> 950</p>
+    """, unsafe_allow_html=True)
 
-        # Overall Sentiment Analysis Map
-        st.header("Overall Sentiment Analysis of Classroom Spaces by Buildings")
-        
-        # Map Creation
-        sentiment_map = folium.Map(
-            location=[df["Latitude"].mean(), df["Longitude"].mean()], zoom_start=15
-        )
-        for _, row in df.iterrows():
-            # Define color based on sentiment score
-            color = (
-                "green"
-                if row["Sentiment"] > 0.2
-                else "orange"
-                if -0.2 <= row["Sentiment"] <= 0.2
-                else "red"
-            )
-            # Add CircleMarker to the map
-            folium.CircleMarker(
-                location=[row["Latitude"], row["Longitude"]],
-                radius=8,
-                color=color,
-                fill=True,
-                fill_color=color,
-                fill_opacity=0.7,
-                popup=folium.Popup(
-                    f"<b>{row['Buildings Name']}</b><br>Sentiment: {row['Sentiment']:.2f}",
-                    max_width=300,
-                ),
-            ).add_to(sentiment_map)
-        
-        # Display map and legend side by side
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            folium_static(sentiment_map, width=850, height=500)
-        with col2:
-            st.markdown("### Legend")
-            st.markdown(
-                """
-                - 🟢 **Positive** (Sentiment > 0.2)  
-                - 🟠 **Neutral** (-0.2 ≤ Sentiment ≤ 0.2)  
-                - 🔴 **Negative** (Sentiment < -0.2)  
-                **Total Responses:** {0}
-                """.format(
-                    len(df)
-                )
-            )
+# Explore Emerging Themes and Responses
+st.markdown("<h2 style='margin-top: 30px;'>Explore Emerging Themes and Responses</h2>", unsafe_allow_html=True)
 
-        # Theme Selection
-        st.header("Explore Emerging Themes and Responses")
-        themes = ["Spacious", "Lighting", "Comfort", "Accessibility", "Collaborative"]
-        selected_theme = st.radio("Select a Theme to Explore:", themes)
+# Create theme selection
+themes = ["Spacious", "Lighting", "Comfort", "Accessibility", "Collaborative"]
+selected_theme = st.radio("Select a Theme to Explore:", themes, index=0)
 
-        # Filter and display data based on the selected theme
-        if selected_theme:
-            st.subheader(f"Buildings Mentioning '{selected_theme}'")
-            theme_data = df[df["Tell us about your classroom"].str.contains(selected_theme, case=False, na=False)]
-            if not theme_data.empty:
-                # Display table with sentiment indicators
-                theme_table = theme_data[["Buildings Name", "Sentiment"]]
-                theme_table["Sentiment Color"] = theme_table["Sentiment"].apply(
-                    lambda x: "🟢 Positive" if x > 0.2 else "🟠 Neutral" if x >= -0.2 else "🔴 Negative"
-                )
-                st.table(theme_table)
+# Display buildings and key responses related to the selected theme
+if selected_theme:
+    st.markdown(f"<h3>Buildings Mentioning '{selected_theme}'</h3>", unsafe_allow_html=True)
+    # Example buildings with sentiment dots
+    building_data = {
+        "Buildings": ["Wilson Hall", "Shelby Center", "Business Administration Building", "Engineering Building"],
+        "Sentiment": ["🟢", "🟠", "🔴", "🟢"]
+    }
+    df = pd.DataFrame(building_data)
+    st.dataframe(df)
 
-                # Key responses
-                st.subheader(f"Key Responses for '{selected_theme}'")
-                for i, row in theme_data.iterrows():
-                    sentiment_icon = (
-                        "🟢" if row["Sentiment"] > 0.2 else "🟠" if row["Sentiment"] >= -0.2 else "🔴"
-                    )
-                    st.markdown(f"{sentiment_icon} {row['Tell us about your classroom']}")
+    # Example key responses
+    st.markdown(f"<h3>Key Responses for '{selected_theme}'</h3>", unsafe_allow_html=True)
+    responses = [
+        {"response": "Spacious and modern classrooms in Wilson Hall.", "sentiment": "🟢"},
+        {"response": "Good lighting but limited space in Shelby Center.", "sentiment": "🟠"},
+        {"response": "Overcrowded and outdated facilities in Business Administration Building.", "sentiment": "🔴"},
+        {"response": "Great accessibility features in Engineering Building.", "sentiment": "🟢"}
+    ]
+    for res in responses[:3]:  # Show only 3-5 responses
+        st.markdown(f"<p>{res['sentiment']} <em>{res['response']}</em></p>", unsafe_allow_html=True)
 
-            else:
-                st.warning("No responses found for the selected theme.")
+# Sentiment Classification by Buildings
+st.markdown("<h2 style='margin-top: 30px;'>Sentiment Classification by Buildings</h2>", unsafe_allow_html=True)
 
-        # Sentiment Classification by Buildings
-        st.header("Sentiment Classification by Buildings")
-        st.subheader("Building Sentiment Treemap")
-        unique_buildings = df["Buildings Name"].unique()
+# Example Treemap
+building_summary = {
+    "Buildings": ["Morton Hall", "Olin B. King Technology Hall", "Shelby Center", "Engineering Building"],
+    "Average_Sentiment": [0.3, -0.5, 0.1, 0.4],
+    "Count": [100, 80, 120, 150]
+}
+df_summary = pd.DataFrame(building_summary)
+fig = px.treemap(
+    df_summary,
+    path=["Buildings"],
+    values="Count",
+    color="Average_Sentiment",
+    color_continuous_scale="RdYlGn",
+    title="Building Sentiment Treemap"
+)
+st.plotly_chart(fig, use_container_width=True)
 
-        # Dropdown to select a building
-        selected_building = st.selectbox("Select a Building for Details:", unique_buildings)
-
-        # Display details for the selected building
-        if selected_building:
-            building_data = df[df["Buildings Name"] == selected_building]
-            st.subheader(f"Details for {selected_building}")
-            st.markdown(f"**Average Sentiment Score:** {building_data['Sentiment'].mean():.2f}")
-            st.markdown(f"**Total Responses:** {len(building_data)}")
-            st.subheader("Key Responses:")
-            for _, row in building_data.iterrows():
-                sentiment_icon = (
-                    "🟢" if row["Sentiment"] > 0.2 else "🟠" if row["Sentiment"] >= -0.2 else "🔴"
-                )
-                st.markdown(f"{sentiment_icon} {row['Tell us about your classroom']}")
-
-    except Exception as e:
-        st.error(f"An error occurred while processing the data: {e}")
-else:
-    st.info("Please upload a CSV file to begin.")
+# Display building details when clicked (simulate selection)
+selected_building = st.selectbox("Select a Building for Details:", df_summary["Buildings"])
+if selected_building:
+    st.markdown(f"<h3>Details for {selected_building}</h3>", unsafe_allow_html=True)
+    avg_sentiment = df_summary.loc[df_summary["Buildings"] == selected_building, "Average_Sentiment"].values[0]
+    count = df_summary.loc[df_summary["Buildings"] == selected_building, "Count"].values[0]
+    st.write(f"**Average Sentiment Score:** {avg_sentiment:.2f}")
+    st.write(f"**Total Responses:** {count}")
+    st.markdown("<h4>Key Responses:</h4>", unsafe_allow_html=True)
+    # Example responses
+    for res in responses[:3]:
+        st.markdown(f"<p>{res['sentiment']} <em>{res['response']}</em></p>", unsafe_allow_html=True)
