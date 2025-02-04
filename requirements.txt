@@ -1,6 +1,6 @@
 streamlit
 pandas
-plotly
+folium
+streamlit-folium
 nltk
 textblob
-yake
