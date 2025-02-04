@@ -1,22 +1,19 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import folium
+from streamlit_folium import folium_static
 import nltk
 from nltk.sentiment import SentimentIntensityAnalyzer
-from streamlit_folium import folium_static
-import folium
 
-# Download NLTK resources
 nltk.download("vader_lexicon")
-
-# Initialize Sentiment Analyzer
 sia = SentimentIntensityAnalyzer()
 
-# Set Streamlit page configuration
+# Page Configuration
 st.set_page_config(page_title="University of Alabama, Huntsville Engagement Analysis", layout="wide")
 st.title("University of Alabama, Huntsville Engagement Analysis Using Machine Learning")
 
-# Predefined themes and keywords
+# Define themes and associated keywords
 themes_dict = {
     "Spacious": ["spacious", "large", "roomy", "open", "airy"],
     "Lighting": ["bright", "natural light", "well-lit", "sunny"],
@@ -25,11 +22,10 @@ themes_dict = {
     "Collaborative": ["collaborative", "interactive", "teamwork", "group"]
 }
 
-# Upload CSV File
+# File Upload
 uploaded_file = st.file_uploader("Upload Classroom Data CSV", type=["csv"])
 
 if uploaded_file:
-    # Load and preprocess data
     @st.cache_data
     def load_data(file):
         df = pd.read_csv(file, encoding="ISO-8859-1")
@@ -41,7 +37,6 @@ if uploaded_file:
 
     df = load_data(uploaded_file)
 
-    # Assign themes to responses
     def assign_themes(response):
         matched_themes = []
         for theme, keywords in themes_dict.items():
@@ -51,41 +46,16 @@ if uploaded_file:
 
     df["Themes"] = df["Corrected Response"].apply(lambda x: assign_themes(x))
 
-    # Aggregate data by buildings
     building_data = df.groupby("Buildings Name").agg(
         Avg_Sentiment=("Sentiment Score", "mean"),
         Count=("Corrected Response", "count"),
         Themes=("Themes", lambda x: ", ".join(set(", ".join(x.dropna()).split(", "))))
     ).reset_index()
 
-    # Map Visualization
-    st.subheader("Overall Sentiment Analysis by Building")
-    total_responses = df["Corrected Response"].notnull().sum()
-
+    # Section 1: Map
+    st.subheader("Section 1: Overall Sentiment Map")
     map_center = [df["Latitude"].mean(), df["Longitude"].mean()]
     folium_map = folium.Map(location=map_center, zoom_start=15)
-
-    # Add a custom legend
-    legend_html = f"""
-    <div style="
-        position: fixed;
-        bottom: 50px;
-        left: 50px;
-        width: 300px;
-        background-color: white;
-        z-index:9999;
-        font-size:14px;
-        padding:10px;
-        border: 2px solid grey;
-    ">
-    <strong>Legend:</strong><br>
-    Positive Sentiment: > 0.2<br>
-    Neutral Sentiment: -0.2 to 0.2<br>
-    Negative Sentiment: < -0.2<br><br>
-    <strong>Total Responses:</strong> {total_responses}
-    </div>
-    """
-    folium_map.get_root().html.add_child(folium.Element(legend_html))
 
     for _, row in building_data.iterrows():
         sentiment_color = (
@@ -111,52 +81,55 @@ if uploaded_file:
             popup=folium.Popup(popup_content, max_width=250),
         ).add_to(folium_map)
 
-    folium_static(folium_map)
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        folium_static(folium_map)
+    with col2:
+        st.markdown("**Legend**")
+        st.markdown("🟢 Positive (> 0.2)")
+        st.markdown("🟠 Neutral (-0.2 to 0.2)")
+        st.markdown("🔴 Negative (< -0.2)")
+        st.markdown(f"**Total Responses:** {len(df)}")
 
-    # Treemap Visualization
-    st.subheader("Sentiment Treemap (Click a Building to Learn More)")
-    treemap_fig = px.treemap(
+    # Section 2: Analyze by Themes
+    st.subheader("Section 2: Analyze by Themes")
+    selected_theme = st.radio("Select a Theme", list(themes_dict.keys()))
+
+    if selected_theme:
+        theme_data = df[df["Themes"].str.contains(selected_theme, na=False)]
+        st.markdown(f"### Buildings Mentioning '{selected_theme}'")
+        for _, row in building_data.iterrows():
+            if selected_theme in row["Themes"]:
+                sentiment_color = "🟢" if row["Avg_Sentiment"] > 0.2 else "🔴" if row["Avg_Sentiment"] < -0.2 else "🟠"
+                st.write(f"{sentiment_color} {row['Buildings Name']}")
+
+        st.markdown(f"### Key Responses for '{selected_theme}'")
+        for _, response in theme_data.iterrows():
+            sentiment_dot = "🟢" if response["Sentiment Score"] > 0.2 else "🔴" if response["Sentiment Score"] < -0.2 else "🟠"
+            st.write(f"{sentiment_dot} \"{response['Corrected Response']}\"")
+
+    # Section 3: Sentiment Treemap
+    st.subheader("Section 3: Sentiment Treemap and Building Details")
+    fig = px.treemap(
         building_data,
         path=["Buildings Name"],
         values="Count",
         color="Avg_Sentiment",
         color_continuous_scale="RdYlGn",
-        title=""
+        title="Building Sentiment Treemap"
     )
-    treemap_fig.update_layout(margin=dict(t=10, l=10, r=10, b=10), height=500)
-    clicked_building = st.plotly_chart(treemap_fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
-    # Theme Selection and Analysis
-    st.sidebar.title("Select a Theme")
-    selected_theme = st.sidebar.radio("Choose a theme:", list(themes_dict.keys()))
+    # Dropdown for Building Details
+    selected_building = st.selectbox("Select a Building for Details:", building_data["Buildings Name"])
 
-    if selected_theme:
-        st.subheader(f"Buildings Mentioning '{selected_theme}'")
-        theme_data = df[df["Themes"].str.contains(selected_theme, na=False)]
-        if not theme_data.empty:
-            st.markdown(f"**Buildings Mentioning '{selected_theme}':**")
-            theme_buildings = building_data[building_data["Buildings Name"].isin(theme_data["Buildings Name"])]
-            for _, row in theme_buildings.iterrows():
-                sentiment_color = "🟢" if row["Avg_Sentiment"] > 0.2 else "🔴" if row["Avg_Sentiment"] < -0.2 else "🟠"
-                st.markdown(f"{sentiment_color} **{row['Buildings Name']}**")
-        else:
-            st.warning(f"No responses matched the theme '{selected_theme}'.")
+    if selected_building:
+        building_details = building_data[building_data["Buildings Name"] == selected_building]
+        st.markdown(f"### Details for {selected_building}")
+        st.write(f"**Average Sentiment Score:** {building_details['Avg_Sentiment'].values[0]:.2f}")
+        st.write(f"**Total Responses:** {building_details['Count'].values[0]}")
 
-        st.markdown(f"### Key Responses for '{selected_theme}'")
-        positive_responses = theme_data[theme_data["Sentiment Score"] > 0.2]["Corrected Response"].tolist()
-        neutral_responses = theme_data[(theme_data["Sentiment Score"] <= 0.2) & (theme_data["Sentiment Score"] >= -0.2)]["Corrected Response"].tolist()
-        negative_responses = theme_data[theme_data["Sentiment Score"] < -0.2]["Corrected Response"].tolist()
-
-        st.markdown("#### Positive Responses:")
-        for response in positive_responses[:3]:
-            st.markdown(f"🟢 \"{response}\"")
-
-        st.markdown("#### Neutral Responses:")
-        for response in neutral_responses[:3]:
-            st.markdown(f"🟠 \"{response}\"")
-
-        st.markdown("#### Negative Responses:")
-        for response in negative_responses[:3]:
-            st.markdown(f"🔴 \"{response}\"")
-else:
-    st.info("Upload a CSV file to get started!")
+        responses = df[df["Buildings Name"] == selected_building]["Corrected Response"].tolist()
+        for response in responses[:5]:
+            sentiment_dot = "🟢" if sia.polarity_scores(response)["compound"] > 0.2 else "🔴" if sia.polarity_scores(response)["compound"] < -0.2 else "🟠"
+            st.write(f"{sentiment_dot} \"{response}\"")
