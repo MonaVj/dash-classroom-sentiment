@@ -92,7 +92,6 @@ if uploaded_file:
             # **SECTION 2: Explore Emerging Themes and Responses**
             st.markdown("<h2>Explore Emerging Themes and Responses</h2>", unsafe_allow_html=True)
 
-            # Predefined theme keywords
             theme_keywords = {
                 "Spacious": ["spacious", "roomy", "open space", "ample", "not cramped"],
                 "Lighting": ["bright", "natural light", "well-lit", "dark", "dim"],
@@ -105,13 +104,11 @@ if uploaded_file:
             selected_theme = st.radio("Select a Theme to Explore:", themes, index=0)
 
             if selected_theme:
-                st.markdown(f"<h3>Buildings Mentioning '{selected_theme}'</h3>", unsafe_allow_html=True)
-
                 keywords = theme_keywords[selected_theme]
                 theme_data = df[df["Tell us about your classroom"].str.contains('|'.join(keywords), case=False, na=False)]
 
+                # Group data
                 grouped_theme_data = theme_data.groupby("Buildings Name").agg({
-                    "Tell us about your classroom": list,
                     "Avg_Sentiment": "mean",
                     "Count": "sum"
                 }).reset_index()
@@ -121,18 +118,23 @@ if uploaded_file:
                 )
                 st.dataframe(grouped_theme_data[["Buildings Name", "Avg_Sentiment", "Count", "Sentiment"]], use_container_width=True)
 
+                # **Key Responses**
                 st.markdown(f"<h3>Key Responses for '{selected_theme}'</h3>", unsafe_allow_html=True)
-                responses = []
-                for _, row in theme_data.iterrows():
-                    sentiment_icon = "🟢" if row["Avg_Sentiment"] > 0.2 else "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"
-                    responses.append({"response": f"*{row['Tell us about your classroom']}*", "sentiment": sentiment_icon, "score": row["Avg_Sentiment"]})
-
-                responses_sorted = sorted(responses, key=lambda x: x["score"], reverse=True)
-                for res in responses_sorted[:6]:  # Display 6 responses (balanced)
+                responses = [{"response": f"*{row['Tell us about your classroom']}*", "sentiment": "🟢" if row["Avg_Sentiment"] > 0.2 else "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"} for _, row in theme_data.iterrows()]
+                for res in responses[:6]:  
                     st.markdown(f"{res['sentiment']} {res['response']}")
 
-            # **SECTION 3: Sentiment Classification by Buildings**
+            # **SECTION 3: Sentiment Classification by Buildings (Tree Chart)**
             st.markdown("<h2>Sentiment Classification by Buildings</h2>", unsafe_allow_html=True)
+            fig = px.treemap(
+                building_summary,
+                path=["Buildings Name"],
+                values="Count",
+                color="Avg_Sentiment",
+                color_continuous_scale="RdYlGn",
+                title="Building Sentiment Treemap",
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
             selected_building = st.selectbox("Select a Building for Details:", building_summary["Buildings Name"])
 
@@ -146,9 +148,8 @@ if uploaded_file:
 
                 st.markdown("<h4>Key Responses:</h4>", unsafe_allow_html=True)
                 building_responses = df[df["Buildings Name"] == selected_building]
-
                 responses = [{"response": f"*{row['Tell us about your classroom']}*", "sentiment": "🟢" if row["Avg_Sentiment"] > 0.2 else "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"} for _, row in building_responses.iterrows()]
-                for res in responses[:6]:  # Display 6 balanced responses
+                for res in responses[:6]:  
                     st.markdown(f"{res['sentiment']} {res['response']}")
 
     except Exception as e:
