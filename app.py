@@ -5,82 +5,108 @@ import nltk
 from nltk.sentiment import SentimentIntensityAnalyzer
 from transformers import pipeline
 
-# Load and preprocess data
-data_file = 'Merged_Classroom_Data_with_Location_Count.csv'
-df = pd.read_csv(data_file, encoding='utf-8')  # Use 'utf-8-sig' if 'utf-8' doesn't work
-df = df.dropna(subset=["Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"])
-df["Buildings Name"] = df["Buildings Name"].str.strip().str.title()
-df["Tell us about your classroom"] = df["Tell us about your classroom"].str.strip().str.lower()
-df["Latitude"] = pd.to_numeric(df["Latitude"], errors="coerce")
-df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
-
-# Initialize sentiment analysis
+# Install NLTK resources
 nltk.download("vader_lexicon")
 sia = SentimentIntensityAnalyzer()
 
-def calculate_sentiment(comment):
-    return sia.polarity_scores(comment)['compound']
+# Load AI models
+try:
+    summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+    grammar_correction = pipeline("text2text-generation", model="textattack/roberta-base-CoLA")  # Alternative model
+except Exception as e:
+    st.warning(f"Model loading error: {e}")
 
-df["Sentiment Score"] = df["Tell us about your classroom"].apply(calculate_sentiment)
-
-# Theme extraction
-themes = ["spacious", "lighting", "comfort", "accessibility", "collaborative"]
-
-def assign_themes(comment):
-    assigned_themes = [theme for theme in themes if theme in comment]
-    return ", ".join(assigned_themes)
-
-df["Themes"] = df["Tell us about your classroom"].apply(assign_themes)
-
-# AI-based summarization
-summarizer = pipeline("summarization")
-
-def generate_summary(building):
-    comments = df[df["Buildings Name"] == building]["Tell us about your classroom"].tolist()
-    text = " ".join(comments)[:1024]  # Limit input to avoid model overload
-    if text:
-        summary = summarizer(text, max_length=50, min_length=10, do_sample=False)[0]["summary_text"]
-    else:
-        summary = "No summary available."
-    return summary
-
-df["Summary"] = df["Buildings Name"].apply(generate_summary)
-
-# Streamlit Application Layout
+# Page Title
 st.title("University of Alabama Huntsville - Classroom Sentiment Analysis")
 
-st.sidebar.header("Filter Options")
-selected_building = st.sidebar.selectbox("Select a building", options=df["Buildings Name"].unique())
+# Upload CSV File
+data_file = st.file_uploader("Upload Classroom Data CSV", type=["csv"])
 
-if selected_building:
-    building_data = df[df["Buildings Name"] == selected_building]
-    st.subheader(f"Details for {selected_building}")
-    st.write(f"Average Sentiment Score: {building_data['Sentiment Score'].mean():.2f}")
-    st.write(f"Total Responses: {len(building_data)}")
-    st.write(f"Themes Highlighted: {', '.join(building_data['Themes'].unique())}")
-    st.write(f"Summary: {generate_summary(selected_building)}")
+if data_file is not None:
+    try:
+        # Read and preprocess data
+        df = pd.read_csv(data_file, encoding="utf-8")
+        df = df.dropna(subset=["Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"])
+        df["Buildings Name"] = df["Buildings Name"].str.strip().str.title()
+        df["Tell us about your classroom"] = df["Tell us about your classroom"].str.strip().str.lower()
+        df["Latitude"] = pd.to_numeric(df["Latitude"], errors="coerce")
+        df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
 
-# Plotting
-st.subheader("Classroom Sentiment Heatmap")
-fig = px.scatter_mapbox(
-    df,
-    lat="Latitude",
-    lon="Longitude",
-    color="Sentiment Score",
-    hover_name="Buildings Name",
-    hover_data={"Sentiment Score": ":.2f", "Themes": True},
-    color_continuous_scale="RdYlGn",
-    title="Sentiment Scores by Classroom Location",
-    zoom=15
-)
-fig.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
-st.plotly_chart(fig)
+        # Sentiment Analysis (handling empty values)
+        df["Sentiment Score"] = df["Tell us about your classroom"].apply(
+            lambda x: sia.polarity_scores(x)["compound"] if isinstance(x, str) and x.strip() else 0
+        )
 
-# Display quotes
-st.subheader("Student Comments by Building")
-for theme in themes:
-    with st.expander(f"Theme: {theme.capitalize()}"):
-        theme_comments = df[df["Themes"].str.contains(theme, na=False)]
-        for _, row in theme_comments.iterrows():
-            color = "green" if row["Sentiment Score"] > 0 else "red"
-            st.markdown(f"<p style='color:{color}'>{row['Tell us about your classroom']}</p>", unsafe_allow_html=True)
+        # Theme Extraction
+        themes = ["spacious", "lighting", "comfort", "accessibility", "collaborative"]
+        df["Themes"] = df["Tell us about your classroom"].apply(
+            lambda x: ", ".join([theme for theme in themes if isinstance(x, str) and theme in x]) if isinstance(x, str) else ""
+        )
+
+        # AI-based Summarization for each building
+        def summarize_building(building):
+            comments = df[df["Buildings Name"] == building]["Tell us about your classroom"].tolist()
+            text = " ".join(comments)[:512]  # Controlled truncation to avoid model overload
+            return summarizer(text, max_length=50, min_length=10, do_sample=False)[0]["summary_text"] if text else "No summary available."
+
+        df["Summary"] = df["Buildings Name"].apply(summarize_building)
+
+        # Grammar correction and top quotes
+        def correct_grammar(quote):
+            return grammar_correction(quote, max_length=100)[0]["generated_text"] if quote else "No data available"
+
+        def get_top_quotes(building):
+            building_data = df[df["Buildings Name"] == building]
+            if not building_data.empty:
+                positive_quote = building_data.sort_values(by="Sentiment Score", ascending=False).iloc[0]["Tell us about your classroom"]
+                negative_quote = building_data.sort_values(by="Sentiment Score", ascending=True).iloc[0]["Tell us about your classroom"]
+                return correct_grammar(positive_quote), correct_grammar(negative_quote)
+            return "No data available", "No data available"
+
+        # Visualization: Map
+        st.header("Sentiment Map")
+        map_fig = px.scatter_mapbox(
+            df,
+            lat="Latitude",
+            lon="Longitude",
+            color="Sentiment Score",
+            hover_name="Buildings Name",
+            hover_data={"Sentiment Score": ":.2f", "Themes": True},
+            color_continuous_scale=px.colors.diverging.RdYlGn,
+            title="Sentiment Scores by Classroom Location",
+            zoom=15,
+        )
+        map_fig.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
+        st.plotly_chart(map_fig)
+
+        # Dropdown for Building Details
+        st.header("Building Details")
+        selected_building = st.selectbox("Select a Building", df["Buildings Name"].unique())
+        if selected_building:
+            building_data = df[df["Buildings Name"] == selected_building]
+            avg_sentiment = building_data["Sentiment Score"].mean()
+            total_responses = len(building_data)
+            themes_highlighted = ", ".join(building_data["Themes"].unique())
+            building_summary = df[df["Buildings Name"] == selected_building]["Summary"].iloc[0]
+
+            st.subheader(f"Details for {selected_building}")
+            st.write(f"**Average Sentiment Score:** {avg_sentiment:.2f}")
+            st.write(f"**Total Responses:** {total_responses}")
+            st.write(f"**Themes Highlighted:** {themes_highlighted}")
+            st.write(f"**Building Summary:** {building_summary}")
+
+            # Top Quotes
+            positive_quote, negative_quote = get_top_quotes(selected_building)
+            st.markdown(f"**Positive:** :green[{positive_quote}]")
+            st.markdown(f"**Negative:** :red[{negative_quote}]")
+
+        # Filter by Theme
+        st.header("Filter by Themes")
+        theme_selected = st.radio("Select a Theme", themes)
+        if theme_selected:
+            filtered_data = df[df["Themes"].str.contains(theme_selected, na=False)]
+            st.write(f"Buildings mentioning '{theme_selected}':")
+            st.dataframe(filtered_data[["Buildings Name", "Sentiment Score", "Themes"]])
+
+    except Exception as e:
+        st.error(f"Error processing file: {e}")
