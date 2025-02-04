@@ -44,21 +44,21 @@ def main():
     # App title
     st.title("Classroom Sentiment Analysis")
 
-    # Upload CSV File
+    # File upload
     data_file = st.file_uploader("Upload Classroom Data CSV", type=["csv"])
-
+    
     if data_file is not None:
         try:
-            # Attempt to read the file with utf-8, fallback to ISO-8859-1
+            # Attempt to read the file with utf-8 encoding, fallback to ISO-8859-1
             try:
                 df = pd.read_csv(data_file, encoding="utf-8", errors="ignore")
             except UnicodeDecodeError:
                 df = pd.read_csv(data_file, encoding="ISO-8859-1", errors="ignore")
 
-            # Validate required columns
+            # Check for required columns
             required_columns = {"Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"}
             if not required_columns.issubset(df.columns):
-                st.error("CSV file is missing required columns.")
+                st.error("CSV file is missing one or more required columns.")
                 st.stop()
 
             # Preprocess data
@@ -69,6 +69,7 @@ def main():
             df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
 
             # Apply transformations
+            st.write("Processing data...")
             df["Corrected Response"] = df["Tell us about your classroom"].apply(correct_sentence)
             df["Extracted Keywords"] = df["Tell us about your classroom"].apply(extract_keywords)
             df["Themes"] = df["Tell us about your classroom"].apply(detect_themes)
@@ -81,4 +82,39 @@ def main():
                 lon="Longitude",
                 hover_name="Buildings Name",
                 hover_data={"Themes": True, "Corrected Response": True},
-                color_dis
+                color_discrete_sequence=["blue"],
+                title="Classroom Feedback Map",
+                zoom=12,
+            )
+            map_fig.update_layout(
+                mapbox_style="open-street-map",
+                margin={"r": 0, "t": 0, "l": 0, "b": 0}
+            )
+            st.plotly_chart(map_fig)
+
+            # Building details
+            st.header("Building Details")
+            selected_building = st.selectbox("Select a Building", df["Buildings Name"].unique())
+            if selected_building:
+                building_data = df[df["Buildings Name"] == selected_building]
+                themes_highlighted = ", ".join(building_data["Themes"].unique())
+                corrected_responses = "\n".join(building_data["Corrected Response"].tolist())
+
+                st.subheader(f"Details for {selected_building}")
+                st.write(f"**Themes Highlighted:** {themes_highlighted}")
+                st.text_area("Corrected Responses", corrected_responses, height=200)
+
+            # Filter by themes
+            st.header("Filter by Themes")
+            theme_selected = st.radio("Select a Theme", list(THEME_DICT.keys()))
+            if theme_selected:
+                filtered_data = df[df["Themes"].str.contains(theme_selected, na=False)]
+                st.write(f"Buildings mentioning '{theme_selected}':")
+                st.dataframe(filtered_data[["Buildings Name", "Themes", "Corrected Response"]])
+
+        except Exception as e:
+            st.error(f"Error processing file: {e}")
+
+# Run the app
+if __name__ == "__main__":
+    main()
