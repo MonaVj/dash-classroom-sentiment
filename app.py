@@ -35,13 +35,13 @@ def get_sentiment_color(score):
 
 # Main Streamlit app function
 def main():
-    # Set page configuration
+    # Set up the page configuration
     st.set_page_config(page_title="Classroom Sentiment Dashboard", layout="wide")
 
     # Header Section
     st.title("📚 Classroom Sentiment and Theme Dashboard")
     st.markdown("""
-        Analyze classroom sentiment and themes. Upload your data, explore the map, and discover key insights!
+        Analyze classroom sentiment and discover insights from your data. Upload your dataset, explore the interactive map, and view trends in building preferences!
     """)
 
     # File upload
@@ -85,7 +85,7 @@ def main():
 
             # Left column: Sentiment Map
             with col1:
-                st.subheader("🗺️ Sentiment Map by Building")
+                st.subheader("🗺️ Sentiment Map")
                 map_center = [building_sentiments["Latitude"].mean(), building_sentiments["Longitude"].mean()]
                 m = folium.Map(location=map_center, zoom_start=15)
 
@@ -94,9 +94,8 @@ def main():
                     sentiment = row["Average_Sentiment"]
                     color = "green" if sentiment > 0.2 else "red" if sentiment < -0.2 else "orange"
                     popup_text = f"""
-                    <strong>Building:</strong> {row['Buildings Name']}<br>
-                    <strong>Avg Sentiment:</strong> {sentiment:.2f}<br>
-                    <strong>Responses:</strong> {row['Count']}
+                    <b>{row['Buildings Name']}</b><br>
+                    <b>Avg Sentiment:</b> {row['Average_Sentiment']:.2f} | <b>Responses:</b> {row['Count']}
                     """
                     folium.CircleMarker(
                         location=[row["Latitude"], row["Longitude"]],
@@ -112,7 +111,7 @@ def main():
 
             # Right column: Treemap
             with col2:
-                st.subheader("📊 Building Sentiment Treemap")
+                st.subheader("📊 Sentiment Treemap")
                 treemap_fig = px.treemap(
                     building_sentiments,
                     path=["Buildings Name"],
@@ -130,7 +129,7 @@ def main():
 
             if selected_building:
                 building_data = df[df["Buildings Name"] == selected_building]
-                st.write(f"### Details for {selected_building}")
+                st.write(f"### {selected_building}")
                 st.write(f"**Average Sentiment Score:** {building_sentiments[building_sentiments['Buildings Name'] == selected_building]['Average_Sentiment'].values[0]:.2f}")
                 st.write(f"**Total Responses:** {len(building_data)}")
 
