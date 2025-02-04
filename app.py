@@ -32,6 +32,9 @@ if uploaded_file:
         if missing_columns:
             st.error(f"The following required columns are missing: {missing_columns}")
         else:
+            # Drop rows with missing Latitude or Longitude
+            df = df.dropna(subset=["Latitude", "Longitude"])
+
             # Sentiment Analysis
             sia = SentimentIntensityAnalyzer()
 
