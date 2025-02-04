@@ -3,6 +3,7 @@ import pandas as pd
 import folium
 from streamlit_folium import folium_static
 import plotly.express as px
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 # Page Configuration
 st.set_page_config(
@@ -10,21 +11,44 @@ st.set_page_config(
     layout="wide",
 )
 
+# Load Data
+@st.cache
+def load_data():
+    data = pd.read_csv("ClassroomOpenResponses.csv")
+    analyzer = SentimentIntensityAnalyzer()
+    data["Sentiment"] = data["Tell us about your classroom"].apply(lambda x: analyzer.polarity_scores(x)["compound"])
+    data["Sentiment_Category"] = data["Sentiment"].apply(
+        lambda x: "Positive" if x > 0.2 else "Neutral" if -0.2 <= x <= 0.2 else "Negative"
+    )
+    return data
+
+df = load_data()
+
 # Title
 st.markdown("<h1 style='text-align: center;'>University of Alabama, Huntsville: Engagement Analysis</h1>", unsafe_allow_html=True)
 
-# Overall Sentiment Map
-st.markdown("<h2 style='margin-top: 30px;'>Overall Sentiment Analysis of Classroom Spaces by Buildings</h2>", unsafe_allow_html=True)
+# Section 1: Overall Sentiment Map
+st.markdown("<h2>Sentiment Analysis of Classroom Spaces by Buildings</h2>", unsafe_allow_html=True)
 
-# Map and Legend Layout
+# Map and Legend
 col1, col2 = st.columns([3, 1])
 with col1:
-    # Display Map
     sentiment_map = folium.Map(location=[34.728, -86.639], zoom_start=15, scrollWheelZoom=False)
+
+    for _, row in df.iterrows():
+        color = "green" if row["Sentiment"] > 0.2 else "orange" if -0.2 <= row["Sentiment"] <= 0.2 else "red"
+        folium.CircleMarker(
+            location=[row["Latitude"], row["Longitude"]],
+            radius=8,
+            color=color,
+            fill=True,
+            fill_color=color,
+            popup=f"Building: {row['Buildings Name']}<br>Sentiment: {row['Sentiment']:.2f}",
+        ).add_to(sentiment_map)
+
     folium_static(sentiment_map, width=800, height=500)
 
 with col2:
-    # Legend
     st.markdown("<h3>Legend</h3>", unsafe_allow_html=True)
     st.markdown("""
     <ul>
@@ -32,63 +56,55 @@ with col2:
         <li><span style='color: orange;'>🟠 Neutral (-0.2 to 0.2)</span></li>
         <li><span style='color: red;'>🔴 Negative (< -0.2)</span></li>
     </ul>
-    <p><strong>Total Responses:</strong> 950</p>
-    """, unsafe_allow_html=True)
+    <p><strong>Total Responses:</strong> {}</p>
+    """.format(len(df)), unsafe_allow_html=True)
 
-# Explore Themes and Responses
-st.markdown("<h2 style='margin-top: 30px;'>Explore Emerging Themes and Responses</h2>", unsafe_allow_html=True)
+# Section 2: Themes and Responses
+st.markdown("<h2>Explore Emerging Themes and Responses</h2>", unsafe_allow_html=True)
 themes = ["Spacious", "Lighting", "Comfort", "Accessibility", "Collaborative"]
 selected_theme = st.radio("Select a Theme to Explore:", themes, index=0)
 
-# Theme Analysis
 if selected_theme:
     st.markdown(f"<h3>Buildings Mentioning '{selected_theme}'</h3>", unsafe_allow_html=True)
-    # Replace hardcoded data with dynamic filtering
-    building_data = {
-        "Buildings": ["Wilson Hall", "Shelby Center", "Business Administration Building", "Engineering Building"],
-        "Sentiment": ["🟢", "🟠", "🔴", "🟢"],
-    }
-    df_theme = pd.DataFrame(building_data)
-    st.dataframe(df_theme)
+    theme_buildings = df[df["Tell us about your classroom"].str.contains(selected_theme, case=False, na=False)]
+    summary = theme_buildings.groupby("Buildings Name")["Sentiment"].mean().reset_index()
+    summary["Sentiment_Category"] = summary["Sentiment"].apply(
+        lambda x: "🟢" if x > 0.2 else "🟠" if -0.2 <= x <= 0.2 else "🔴"
+    )
+    st.dataframe(summary.rename(columns={"Buildings Name": "Building", "Sentiment": "Avg Sentiment"}))
 
     st.markdown(f"<h3>Key Responses for '{selected_theme}'</h3>", unsafe_allow_html=True)
-    responses = [
-        {"response": "Spacious and modern classrooms in Wilson Hall.", "sentiment": "🟢"},
-        {"response": "Good lighting but limited space in Shelby Center.", "sentiment": "🟠"},
-        {"response": "Overcrowded and outdated facilities in Business Administration Building.", "sentiment": "🔴"},
-        {"response": "Great accessibility features in Engineering Building.", "sentiment": "🟢"},
-    ]
-    for res in responses[:3]:  # Show top 3 responses
-        st.markdown(f"{res['sentiment']} {res['response']}")
+    for _, row in theme_buildings.iterrows():
+        st.markdown(
+            f"{'🟢' if row['Sentiment'] > 0.2 else '🟠' if -0.2 <= row['Sentiment'] <= 0.2 else '🔴'} {row['Tell us about your classroom']} (Building: {row['Buildings Name']})"
+        )
 
-# Sentiment Classification by Buildings
-st.markdown("<h2 style='margin-top: 30px;'>Sentiment Classification by Buildings</h2>", unsafe_allow_html=True)
+# Section 3: Sentiment Classification by Buildings
+st.markdown("<h2>Sentiment Classification by Buildings</h2>", unsafe_allow_html=True)
 
-# Example Treemap Data
-building_summary = {
-    "Buildings": ["Morton Hall", "Olin B. King Technology Hall", "Shelby Center", "Engineering Building"],
-    "Average_Sentiment": [0.3, -0.5, 0.1, 0.4],
-    "Count": [100, 80, 120, 150],
-}
-df_summary = pd.DataFrame(building_summary)
+building_summary = df.groupby("Buildings Name").agg(
+    Avg_Sentiment=("Sentiment", "mean"),
+    Total_Responses=("Sentiment", "size"),
+).reset_index()
+
 fig = px.treemap(
-    df_summary,
-    path=["Buildings"],
-    values="Count",
-    color="Average_Sentiment",
+    building_summary,
+    path=["Buildings Name"],
+    values="Total_Responses",
+    color="Avg_Sentiment",
     color_continuous_scale="RdYlGn",
     title="Building Sentiment Treemap",
 )
 st.plotly_chart(fig, use_container_width=True)
 
-# Building Selection for Details
-selected_building = st.selectbox("Select a Building for Details:", df_summary["Buildings"])
-if selected_building:
-    st.markdown(f"<h3>Details for {selected_building}</h3>", unsafe_allow_html=True)
-    avg_sentiment = df_summary.loc[df_summary["Buildings"] == selected_building, "Average_Sentiment"].values[0]
-    count = df_summary.loc[df_summary["Buildings"] == selected_building, "Count"].values[0]
-    st.write(f"**Average Sentiment Score:** {avg_sentiment:.2f}")
-    st.write(f"**Total Responses:** {count}")
-    st.markdown("<h4>Key Responses:</h4>", unsafe_allow_html=True)
-    for res in responses[:3]:
-        st.markdown(f"{res['sentiment']} {res['response']}")
+# Display Details for Each Building
+st.markdown("<h3>Details for All Buildings</h3>", unsafe_allow_html=True)
+for _, building in building_summary.iterrows():
+    st.markdown(f"### {building['Buildings Name']}")
+    st.write(f"**Average Sentiment Score:** {building['Avg_Sentiment']:.2f}")
+    st.write(f"**Total Responses:** {building['Total_Responses']}")
+    building_responses = df[df["Buildings Name"] == building["Buildings Name"]]
+    for _, response in building_responses.head(5).iterrows():  # Limit to 3-5 responses
+        st.markdown(
+            f"{'🟢' if response['Sentiment'] > 0.2 else '🟠' if -0.2 <= response['Sentiment'] <= 0.2 else '🔴'} {response['Tell us about your classroom']}"
+        )
