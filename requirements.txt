@@ -4,3 +4,4 @@ plotly
 nltk
 textblob
 yake
+chardet
