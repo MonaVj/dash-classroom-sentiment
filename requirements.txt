@@ -3,3 +3,5 @@ pandas
 plotly
 nltk
 transformers
+torch
+sentencepiece  # Required for Hugging Face models
