@@ -1,5 +1,3 @@
-# Install necessary packages
-!pip install streamlit pandas plotly nltk textblob yake --quiet
 
 # Import necessary libraries
 import streamlit as st
