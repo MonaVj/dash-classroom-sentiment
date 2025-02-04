@@ -37,7 +37,6 @@ if uploaded_file:
 
             # Sentiment Analysis
             sia = SentimentIntensityAnalyzer()
-
             if "Avg_Sentiment" not in df.columns:
                 df["Avg_Sentiment"] = df["Tell us about your classroom"].apply(
                     lambda x: sia.polarity_scores(x)["compound"] if pd.notnull(x) else 0
@@ -47,6 +46,14 @@ if uploaded_file:
                 df["Count"] = 1
             else:
                 df["Count"] = df["Count"].fillna(0).astype(int)
+
+            # Aggregate data by building
+            building_summary = df.groupby("Buildings Name").agg(
+                Avg_Sentiment=("Avg_Sentiment", "mean"),
+                Latitude=("Latitude", "mean"),
+                Longitude=("Longitude", "mean"),
+                Count=("Count", "sum"),
+            ).reset_index()
 
             # Preview Data
             st.write("### Data Preview")
@@ -58,9 +65,9 @@ if uploaded_file:
                 unsafe_allow_html=True,
             )
             map_center = [df["Latitude"].mean(), df["Longitude"].mean()]
-            folium_map = folium.Map(location=map_center, zoom_start=15)
+            folium_map = folium.Map(location=map_center, zoom_start=15, scrollWheelZoom=False)  # Disable scroll zoom
 
-            for _, row in df.iterrows():
+            for _, row in building_summary.iterrows():
                 sentiment_color = (
                     "green" if row["Avg_Sentiment"] > 0.2 else "red" if row["Avg_Sentiment"] < -0.2 else "orange"
                 )
@@ -120,9 +127,6 @@ if uploaded_file:
                 "<h2 style='margin-top: 30px;'>Sentiment Classification by Buildings</h2>",
                 unsafe_allow_html=True,
             )
-            building_summary = df.groupby("Buildings Name").agg(
-                Avg_Sentiment=("Avg_Sentiment", "mean"), Count=("Count", "sum")
-            ).reset_index()
             fig = px.treemap(
                 building_summary,
                 path=["Buildings Name"],
