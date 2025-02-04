@@ -49,8 +49,11 @@ def main():
 
     if data_file is not None:
         try:
-            # Read the CSV file
-            df = pd.read_csv(data_file, encoding="utf-8")
+            # Attempt to read the CSV file with fallback encoding
+            try:
+                df = pd.read_csv(data_file, encoding="utf-8")
+            except UnicodeDecodeError:
+                df = pd.read_csv(data_file, encoding="ISO-8859-1")
 
             # Validate required columns
             required_columns = {"Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"}
