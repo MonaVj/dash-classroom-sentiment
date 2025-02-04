@@ -1,32 +1,48 @@
-# Install required libraries
-!pip install streamlit pandas plotly nltk transformers torch sentencepiece --quiet
+# Install necessary packages
+!pip install streamlit pandas plotly nltk textblob yake --quiet
 
 # Import necessary libraries
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import nltk
-import torch
-from nltk.sentiment import SentimentIntensityAnalyzer
-from transformers import pipeline
+from textblob import TextBlob
+import yake
 
 # Initialize NLTK
-nltk.download("vader_lexicon")
-sia = SentimentIntensityAnalyzer()
+nltk.download("stopwords")
 
-# Check for GPU availability
-device = 0 if torch.cuda.is_available() else -1  # Use GPU if available, else CPU
+# Define themes and associated words
+THEME_DICT = {
+    "Spacious": ["spacious", "large", "open", "airy", "big"],
+    "Lighting": ["bright", "dark", "lighting", "sunlight", "dim"],
+    "Comfort": ["comfortable", "seats", "warm", "cozy", "cold", "ac", "ventilation"],
+    "Accessibility": ["stairs", "wheelchair", "elevator", "distance", "accessible"],
+    "Collaborative": ["teamwork", "group", "interactive", "discussion"],
+}
 
-# Load AI models with error handling and lightweight alternatives
-try:
-    summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-6-6", device=device)
-    grammar_correction = pipeline("text2text-generation", model="textattack/bert-base-uncased-CoLA", device=device)
-except Exception as e:
-    st.error(f"Error loading AI models: {e}")
-    summarizer = None
-    grammar_correction = None
+# Function to correct grammar and reframe sentence
+def correct_sentence(text):
+    if isinstance(text, str):
+        return str(TextBlob(text).correct())
+    return text  # Return original if not a valid string
 
-# Write a main function for Streamlit
+# Function to extract keywords using YAKE
+def extract_keywords(text, num_keywords=5):
+    if isinstance(text, str):
+        kw_extractor = yake.KeywordExtractor(lan="en", n=1, dedupLim=0.9, top=num_keywords)
+        keywords = kw_extractor.extract_keywords(text)
+        return ", ".join([kw[0] for kw in keywords])  # Extract keywords only
+    return ""
+
+# Function to detect themes
+def detect_themes(text):
+    if isinstance(text, str):
+        detected_themes = [theme for theme, words in THEME_DICT.items() if any(word in text.lower() for word in words)]
+        return ", ".join(detected_themes) if detected_themes else "No clear theme"
+    return "No clear theme"
+
+# Streamlit UI
 def main():
     st.title("Classroom Sentiment Analysis")
 
@@ -35,7 +51,7 @@ def main():
 
     if data_file is not None:
         try:
-            # Read and preprocess data with encoding fallback
+            # Read and preprocess data
             df = pd.read_csv(data_file, encoding="utf-8", errors="ignore")
 
             # Validate required columns
@@ -44,57 +60,17 @@ def main():
                 st.error("CSV file is missing required columns.")
                 st.stop()
 
+            # Data Cleaning
             df = df.dropna(subset=["Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"])
             df["Buildings Name"] = df["Buildings Name"].str.strip().str.title()
             df["Tell us about your classroom"] = df["Tell us about your classroom"].str.strip().str.lower()
             df["Latitude"] = pd.to_numeric(df["Latitude"], errors="coerce")
             df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
 
-            # Sentiment Analysis
-            df["Sentiment Score"] = df["Tell us about your classroom"].apply(
-                lambda x: sia.polarity_scores(x)["compound"] if isinstance(x, str) and x.strip() else 0
-            )
-
-            # Theme Extraction
-            themes = ["spacious", "lighting", "comfort", "accessibility", "collaborative"]
-            df["Themes"] = df["Tell us about your classroom"].apply(
-                lambda x: ", ".join([theme for theme in themes if isinstance(x, str) and theme in x]) if isinstance(x, str) else ""
-            )
-
-            # AI-based Summarization for each building
-            def summarize_building(building):
-                comments = df[df["Buildings Name"] == building]["Tell us about your classroom"].tolist()
-                text = " ".join(comments)[:400]  # Reduce length to prevent memory issues
-                if summarizer and text:
-                    try:
-                        summary = summarizer(text, max_length=50, min_length=10, do_sample=False)
-                        return summary[0]["summary_text"]
-                    except Exception:
-                        return "No summary available."
-                return "No summary available."
-
-            df["Summary"] = df["Buildings Name"].apply(summarize_building)
-
-            # Grammar correction and top quotes
-            def correct_grammar(quote):
-                if grammar_correction and quote:
-                    try:
-                        corrected_text = grammar_correction(quote, max_length=100)
-                        return corrected_text[0]["generated_text"]
-                    except Exception:
-                        return "No correction available."
-                return "No data available."
-
-            def get_top_quotes(building):
-                building_data = df[df["Buildings Name"] == building]
-                if not building_data.empty:
-                    try:
-                        positive_quote = building_data.sort_values(by="Sentiment Score", ascending=False).iloc[0]["Tell us about your classroom"]
-                        negative_quote = building_data.sort_values(by="Sentiment Score", ascending=True).iloc[0]["Tell us about your classroom"]
-                        return correct_grammar(positive_quote), correct_grammar(negative_quote)
-                    except Exception:
-                        return "No data available", "No data available"
-                return "No data available", "No data available"
+            # Apply transformations
+            df["Corrected Response"] = df["Tell us about your classroom"].apply(correct_sentence)
+            df["Extracted Keywords"] = df["Tell us about your classroom"].apply(extract_keywords)
+            df["Themes"] = df["Tell us about your classroom"].apply(detect_themes)
 
             # Visualization: Map
             st.header("Sentiment Map")
@@ -102,12 +78,11 @@ def main():
                 df,
                 lat="Latitude",
                 lon="Longitude",
-                color="Sentiment Score",
                 hover_name="Buildings Name",
-                hover_data={"Sentiment Score": ":.2f", "Themes": True},
+                hover_data={"Themes": True, "Corrected Response": True},
                 color_continuous_scale=px.colors.diverging.RdYlGn,
-                title="Sentiment Scores by Classroom Location",
-                zoom=12,  # Reduce zoom for better visibility
+                title="Classroom Feedback Map",
+                zoom=12,
             )
             map_fig.update_layout(mapbox_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
             st.plotly_chart(map_fig)
@@ -117,29 +92,21 @@ def main():
             selected_building = st.selectbox("Select a Building", df["Buildings Name"].unique())
             if selected_building:
                 building_data = df[df["Buildings Name"] == selected_building]
-                avg_sentiment = building_data["Sentiment Score"].mean()
-                total_responses = len(building_data)
                 themes_highlighted = ", ".join(building_data["Themes"].unique())
-                building_summary = df[df["Buildings Name"] == selected_building]["Summary"].iloc[0]
+                corrected_responses = "\n".join(building_data["Corrected Response"].tolist())
 
                 st.subheader(f"Details for {selected_building}")
-                st.write(f"**Average Sentiment Score:** {avg_sentiment:.2f}")
-                st.write(f"**Total Responses:** {total_responses}")
                 st.write(f"**Themes Highlighted:** {themes_highlighted}")
-                st.write(f"**Building Summary:** {building_summary}")
-
-                # Top Quotes
-                positive_quote, negative_quote = get_top_quotes(selected_building)
-                st.markdown(f"**Positive:** :green[{positive_quote}]")
-                st.markdown(f"**Negative:** :red[{negative_quote}]")
+                st.write("**Corrected Responses:**")
+                st.text_area("", corrected_responses, height=200)
 
             # Filter by Theme
             st.header("Filter by Themes")
-            theme_selected = st.radio("Select a Theme", themes)
+            theme_selected = st.radio("Select a Theme", list(THEME_DICT.keys()))
             if theme_selected:
                 filtered_data = df[df["Themes"].str.contains(theme_selected, na=False)]
                 st.write(f"Buildings mentioning '{theme_selected}':")
-                st.dataframe(filtered_data[["Buildings Name", "Sentiment Score", "Themes"]])
+                st.dataframe(filtered_data[["Buildings Name", "Themes", "Corrected Response"]])
 
         except Exception as e:
             st.error(f"Error processing file: {e}")
