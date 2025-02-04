@@ -49,11 +49,25 @@ def main():
 
     if data_file is not None:
         try:
+            # Debug uploaded file
+            st.write("Uploaded file preview:")
+            st.write(data_file.getvalue().decode("utf-8")[:500])
+
             # Attempt to read the CSV file with fallback encoding
             try:
                 df = pd.read_csv(data_file, encoding="utf-8")
             except UnicodeDecodeError:
                 df = pd.read_csv(data_file, encoding="ISO-8859-1")
+            
+            # Check if the dataframe is empty
+            if df.empty:
+                st.error("The uploaded file is empty or contains no data.")
+                st.stop()
+
+            # Check if columns are present
+            if df.columns.size == 0:
+                st.error("The uploaded file has no columns to parse. Please check the file format.")
+                st.stop()
 
             # Validate required columns
             required_columns = {"Tell us about your classroom", "Latitude", "Longitude", "Buildings Name"}
