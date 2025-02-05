@@ -179,15 +179,15 @@ if uploaded_file:
                 recommendations = []
                 if avg_sentiment > 0.2:
                     recommendations = [
-                        "Maintain current strengths like lighting and seating.",
-                        "Add collaboration spaces.",
-                        "Upgrade AV systems.",
+                        "Maintain strengths in lighting and seating.",
+                        "Add more student collaboration zones.",
+                        "Consider upgrading AV equipment.",
                     ]
                 elif avg_sentiment <= -0.2:
                     recommendations = [
-                        "Address outdated infrastructure.",
-                        "Add accessible pathways.",
-                        "Reconfigure layouts."
+                        "Prioritize improved accessibility pathways.",
+                        "Modernize outdated interiors and layouts.",
+                        "Enhance lighting for productivity and comfort.",
                     ]
 
                 for rec in recommendations:
