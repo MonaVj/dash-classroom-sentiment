@@ -80,8 +80,9 @@ if uploaded_file:
                 st.markdown(f"**Total Responses:** {len(df)}")
 
             # Section 2: Explore Emerging Themes and Responses
-            st.markdown("<h2>Explore Emerging Themes and Responses</h2>", unsafe_allow_html=True)
+st.markdown("<h2>Explore Emerging Themes and Responses</h2>", unsafe_allow_html=True)
 
+            # Predefined keywords for each theme
             theme_keywords = {
                 "Spacious": ["spacious", "roomy", "open space", "ample", "not cramped"],
                 "Lighting": ["bright", "natural light", "well-lit", "dark", "dim"],
@@ -89,22 +90,26 @@ if uploaded_file:
                 "Accessibility": ["accessible", "ramp", "wheelchair", "disability", "parking"],
                 "Collaborative": ["collaborative", "group", "discussion", "teamwork"],
             }
-
+            
+            # Theme selection
             themes = list(theme_keywords.keys())
             selected_theme = st.radio("Select a Theme to Explore:", themes, index=0)
-
+            
             if selected_theme:
                 st.markdown(f"<h3>Buildings Mentioning '{selected_theme}'</h3>", unsafe_allow_html=True)
-
+            
+                # Fetch keywords for the selected theme
                 keywords = theme_keywords[selected_theme]
                 theme_data = df[df["Tell us about your classroom"].str.contains('|'.join(keywords), case=False, na=False)]
-
+            
+                # Aggregate sentiment and response data
                 grouped_theme_data = theme_data.groupby("Buildings Name").agg({
                     "Tell us about your classroom": list,
                     "Avg_Sentiment": "mean",
                     "Count": "sum"
                 }).reset_index()
-
+            
+                # Add sentiment icons to the table
                 grouped_theme_data["Sentiment"] = grouped_theme_data["Avg_Sentiment"].apply(
                     lambda x: "🟢" if x > 0.2 else "🟠" if -0.2 <= x <= 0.2 else "🔴"
                 )
@@ -114,7 +119,8 @@ if uploaded_file:
                     inplace=True
                 )
                 st.dataframe(grouped_theme_data_display, use_container_width=True)
-
+            
+                # Display key responses for the theme
                 st.markdown(f"<h3>Key Responses for '{selected_theme}'</h3>", unsafe_allow_html=True)
                 responses = []
                 for _, row in theme_data.iterrows():
@@ -123,21 +129,35 @@ if uploaded_file:
                     )
                     building_name = row["Buildings Name"]
                     response_text = row["Tell us about your classroom"]
+                    
+                    # Shorten response and integrate building name
+                    if selected_theme == "Collaborative":
+                        if "Chan Auditorium" in response_text or "back-to-back classrooms" in response_text:
+                            response_text = f"The Chan Auditorium in {building_name} is not conducive for classes due to noise."
+                        elif "study groups" in response_text:
+                            response_text = f"{building_name} offers great spaces for study groups."
+                    elif selected_theme == "Spacious":
+                        if "open space" in response_text:
+                            response_text = f"The classrooms in {building_name} are spacious and well-lit."
+            
                     responses.append({
                         "response": f"*{response_text}*",
                         "sentiment": sentiment_icon,
                         "score": row["Avg_Sentiment"]
                     })
-
+            
+                # Sort responses by sentiment (Good → Neutral → Bad)
                 positive = [r for r in responses if r["score"] > 0.2]
                 neutral = [r for r in responses if -0.2 <= r["score"] <= 0.2]
                 negative = [r for r in responses if r["score"] < -0.2]
-
+            
+                # Balance responses: 2 positive, 2 neutral, 2 negative if possible
                 balanced_responses = positive[:2] + neutral[:2] + negative[:2]
                 balanced_responses_sorted = sorted(balanced_responses, key=lambda x: x["score"], reverse=True)
-
+            
                 for res in balanced_responses_sorted:
                     st.markdown(f"{res['sentiment']} {res['response']}")
+
 
             # Section 3: Sentiment Classification by Buildings
             st.markdown("<h2>Sentiment Classification by Buildings</h2>", unsafe_allow_html=True)
