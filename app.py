@@ -48,7 +48,7 @@ if uploaded_file:
             Count=("Count", "sum"),
         ).reset_index()
 
-        # Section 1: Map and Ranking
+        # Section 1: Map
         st.subheader("Overall Sentiment Map")
         st.markdown(
             "This map visualizes the sentiment scores for each building based on user feedback. "
@@ -92,13 +92,11 @@ if uploaded_file:
             st.markdown("🔴 Negative (< -0.2)")
             st.markdown(f"**Total Responses:** {len(df)}")
 
-            st.markdown("<h4>Building Rankings:</h4>", unsafe_allow_html=True)
-            ranked_buildings = building_summary.sort_values("Avg_Sentiment", ascending=False)
-            for _, row in ranked_buildings.iterrows():
-                st.markdown(f"- {row['Buildings Name']}: **{row['Avg_Sentiment']:.2f}**")
-
         # Section 2: Explore Themes
         st.markdown("<h2 style='margin-top: 30px;'>Explore Emerging Themes and Responses</h2>", unsafe_allow_html=True)
+        st.markdown(
+            "This section categorizes feedback based on specific themes like spaciousness, lighting, comfort, accessibility, and collaboration. Select a theme to see which buildings are mentioned and the associated sentiments."
+        )
         theme_keywords = {
             "Spacious": ["spacious", "roomy", "open space", "ample", "not cramped"],
             "Lighting": ["bright", "natural light", "well-lit", "dark", "dim"],
@@ -120,7 +118,10 @@ if uploaded_file:
                 "Count": "sum"
             }).reset_index()
 
-            grouped_theme_data_display = grouped_theme_data[["Buildings Name", "Avg_Sentiment", "Count"]]
+            grouped_theme_data["Sentiment"] = grouped_theme_data["Avg_Sentiment"].apply(
+                lambda x: "🟢" if x > 0.2 else "🟠" if -0.2 <= x <= 0.2 else "🔴"
+            )
+            grouped_theme_data_display = grouped_theme_data[["Buildings Name", "Avg_Sentiment", "Count", "Sentiment"]]
             grouped_theme_data_display.rename(
                 columns={"Buildings Name": "Building", "Avg_Sentiment": "Average Score", "Count": "Response Count"},
                 inplace=True
@@ -128,13 +129,33 @@ if uploaded_file:
             st.dataframe(grouped_theme_data_display, use_container_width=True)
 
             st.markdown(f"<h3>Key Responses for '{selected_theme}'</h3>", unsafe_allow_html=True)
+            responses = []
             for _, row in theme_data.iterrows():
+                sentiment_icon = (
+                    "🟢" if row["Avg_Sentiment"] > 0.2 else
+                    "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"
+                )
                 building_name = row["Buildings Name"]
                 response_text = row["Tell us about your classroom"]
-                st.markdown(f"- **{building_name}**: {response_text}")
+                responses.append({
+                    "response": f"{building_name}: {response_text}",
+                    "sentiment": sentiment_icon,
+                    "score": row["Avg_Sentiment"]
+                })
+
+            positive = [r for r in responses if r["score"] > 0.2]
+            neutral = [r for r in responses if -0.2 <= r["score"] <= 0.2]
+            negative = [r for r in responses if r["score"] < -0.2]
+
+            balanced_responses = positive[:2] + neutral[:2] + negative[:2]
+            for res in balanced_responses:
+                st.markdown(f"{res['sentiment']} {res['response']}")
 
         # Section 3: Sentiment Classification by Buildings
         st.markdown("<h2 style='margin-top: 30px;'>Sentiment Classification by Buildings</h2>", unsafe_allow_html=True)
+        st.markdown(
+            "This treemap visualizes the distribution of responses and sentiment scores for each building. The size represents the number of responses, and the color indicates the sentiment."
+        )
         fig = px.treemap(
             building_summary,
             path=["Buildings Name"],
@@ -156,29 +177,47 @@ if uploaded_file:
 
             st.markdown("<h4>Key Responses:</h4>", unsafe_allow_html=True)
             building_responses = df[df["Buildings Name"] == selected_building]
-            for _, row in building_responses.head(3).iterrows():  # Limit to 3 responses
-                response_text = row["Tell us about your classroom"]
-                st.markdown(f"- {response_text}")
+            responses = []
+            for _, row in building_responses.iterrows():
+                sentiment = (
+                    "🟢" if row["Avg_Sentiment"] > 0.2 else
+                    "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"
+                )
+                if len(row["Tell us about your classroom"].split()) > 5:
+                    responses.append({
+                        "response": row["Tell us about your classroom"],
+                        "sentiment": sentiment,
+                        "score": row["Avg_Sentiment"]
+                    })
+            positive = [r for r in responses if r["score"] > 0.2]
+            neutral = [r for r in responses if -0.2 <= r["score"] <= 0.2]
+            negative = [r for r in responses if r["score"] < -0.2]
 
-            # Custom Recommendations
+            balanced_responses = positive[:2] + neutral[:2] + negative[:2]
+            for res in balanced_responses:
+                st.markdown(f"{res['sentiment']} {res['response']}")
+
             st.markdown("<h4>Design Recommendations:</h4>", unsafe_allow_html=True)
             if avg_sentiment > 0.2:
                 recommendations = [
-                    "Maintain strong areas like natural light and spacious layouts.",
-                    "Add flexible furniture for group activities.",
-                    "Improve acoustic systems to enhance learning experiences.",
+                    "Enhance existing strengths such as lighting and seating comfort.",
+                    "Introduce advanced collaboration tools for group work.",
+                    "Add flexible layouts to adapt to modern teaching needs."
                 ]
             elif -0.2 <= avg_sentiment <= 0.2:
                 recommendations = [
-                    "Improve accessibility features like wider hallways and ramps.",
-                    "Introduce ergonomic seating for better comfort.",
-                    "Reassess lighting and ventilation to enhance the atmosphere."
+                    "Address lighting and acoustics to create a balanced environment.",
+                    "Incorporate ergonomic furniture for long sessions.",
+                    "Expand accessibility features such as ramps and elevators."
                 ]
             else:
                 recommendations = [
-                    "Address outdated facilities with a full redesign.",
-                    "Incorporate modern technology for interactive learning.",
-                    "Prioritize comfort through improved seating and space optimization."
+                    "Prioritize redesigning outdated and cramped spaces.",
+                    "Incorporate modern AV systems for better teaching experiences.",
+                    "Add more natural light and ventilation to improve comfort."
                 ]
             for rec in recommendations:
                 st.markdown(f"- {rec}")
+
+
+
