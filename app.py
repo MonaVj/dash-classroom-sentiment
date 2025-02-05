@@ -89,7 +89,6 @@ if uploaded_file:
             # Section 2: Explore Emerging Themes and Responses
             st.markdown("<h2>Explore Emerging Themes and Responses</h2>", unsafe_allow_html=True)
 
-            # Predefined keywords for each theme
             theme_keywords = {
                 "Spacious": ["spacious", "roomy", "open space", "ample", "not cramped"],
                 "Lighting": ["bright", "natural light", "well-lit", "dark", "dim"],
