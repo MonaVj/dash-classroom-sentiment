@@ -6,6 +6,7 @@ import plotly.express as px
 from nltk.sentiment import SentimentIntensityAnalyzer
 import nltk
 
+# Download NLTK resources
 nltk.download("vader_lexicon")
 
 # Page Configuration
@@ -15,21 +16,20 @@ st.set_page_config(
 )
 
 # Title
-st.markdown("<h1 style='text-align: center;'>University of Alabama, Huntsville: Engagement Analysis</h1>", unsafe_allow_html=True)
+st.markdown(
+    "<h1 style='text-align: center;'>University of Alabama, Huntsville: Engagement Analysis</h1>",
+    unsafe_allow_html=True,
+)
 
-# File Upload Section
+# File Upload
 uploaded_file = st.file_uploader("Upload your dataset (CSV format)", type=["csv"])
-
 if uploaded_file:
     try:
         # Load Data
-        df = pd.read_csv(uploaded_file, encoding="ISO-8859-1")
-
-        # Ensure required columns exist
+        df = pd.read_csv(uploaded_file)
         required_columns = ["Latitude", "Longitude", "Buildings Name", "Tell us about your classroom"]
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            st.error(f"The following required columns are missing: {missing_columns}")
+        if not all(col in df.columns for col in required_columns):
+            st.error(f"Missing required columns: {', '.join(required_columns)}")
         else:
             # Sentiment Analysis
             sia = SentimentIntensityAnalyzer()
@@ -38,7 +38,7 @@ if uploaded_file:
             )
             df["Count"] = 1
 
-            # Aggregate data by building
+            # Aggregate Data by Building
             building_summary = df.groupby("Buildings Name").agg(
                 Avg_Sentiment=("Avg_Sentiment", "mean"),
                 Latitude=("Latitude", "mean"),
@@ -79,9 +79,8 @@ if uploaded_file:
                 st.markdown("🔴 Negative (< -0.2)")
                 st.markdown(f"**Total Responses:** {len(df)}")
 
-            # Section 2: Explore Emerging Themes and Responses
+            # Section 2: Themes and Responses
             st.markdown("<h2>Explore Emerging Themes and Responses</h2>", unsafe_allow_html=True)
-
             theme_keywords = {
                 "Spacious": ["spacious", "roomy", "open space", "ample", "not cramped"],
                 "Lighting": ["bright", "natural light", "well-lit", "dark", "dim"],
@@ -89,31 +88,21 @@ if uploaded_file:
                 "Accessibility": ["accessible", "ramp", "wheelchair", "disability", "parking"],
                 "Collaborative": ["collaborative", "group", "discussion", "teamwork"],
             }
-
             themes = list(theme_keywords.keys())
             selected_theme = st.radio("Select a Theme to Explore:", themes, index=0)
 
             if selected_theme:
-                st.markdown(f"<h3>Buildings Mentioning '{selected_theme}'</h3>", unsafe_allow_html=True)
-
                 keywords = theme_keywords[selected_theme]
                 theme_data = df[df["Tell us about your classroom"].str.contains('|'.join(keywords), case=False, na=False)]
-
-                grouped_theme_data = theme_data.groupby("Buildings Name").agg({
-                    "Tell us about your classroom": list,
-                    "Avg_Sentiment": "mean",
-                    "Count": "sum"
-                }).reset_index()
+                grouped_theme_data = theme_data.groupby("Buildings Name").agg(
+                    Avg_Sentiment=("Avg_Sentiment", "mean"),
+                    Count=("Count", "sum"),
+                ).reset_index()
 
                 grouped_theme_data["Sentiment"] = grouped_theme_data["Avg_Sentiment"].apply(
                     lambda x: "🟢" if x > 0.2 else "🟠" if -0.2 <= x <= 0.2 else "🔴"
                 )
-                grouped_theme_data_display = grouped_theme_data[["Buildings Name", "Avg_Sentiment", "Count", "Sentiment"]]
-                grouped_theme_data_display.rename(
-                    columns={"Buildings Name": "Building", "Avg_Sentiment": "Average Score", "Count": "Response Count"},
-                    inplace=True
-                )
-                st.dataframe(grouped_theme_data_display, use_container_width=True)
+                st.dataframe(grouped_theme_data)
 
                 st.markdown(f"<h3>Key Responses for '{selected_theme}'</h3>", unsafe_allow_html=True)
                 responses = []
@@ -121,73 +110,55 @@ if uploaded_file:
                     sentiment_icon = (
                         "🟢" if row["Avg_Sentiment"] > 0.2 else "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"
                     )
-                    building_name = row["Buildings Name"]
-                    response_text = row["Tell us about your classroom"]
                     responses.append({
-                        "response": f"*{response_text}*",
+                        "response": f"*{row['Tell us about your classroom']}*",
                         "sentiment": sentiment_icon,
-                        "score": row["Avg_Sentiment"]
                     })
 
-                positive = [r for r in responses if r["score"] > 0.2]
-                neutral = [r for r in responses if -0.2 <= r["score"] <= 0.2]
-                negative = [r for r in responses if r["score"] < -0.2]
-
-                balanced_responses = positive[:2] + neutral[:2] + negative[:2]
-                balanced_responses_sorted = sorted(balanced_responses, key=lambda x: x["score"], reverse=True)
-
-                for res in balanced_responses_sorted:
+                for res in responses[:6]:
                     st.markdown(f"{res['sentiment']} {res['response']}")
 
             # Section 3: Sentiment Classification by Buildings
             st.markdown("<h2>Sentiment Classification by Buildings</h2>", unsafe_allow_html=True)
+            fig = px.treemap(
+                building_summary,
+                path=["Buildings Name"],
+                values="Count",
+                color="Avg_Sentiment",
+                color_continuous_scale="RdYlGn",
+                title="Building Sentiment Treemap",
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
             selected_building = st.selectbox("Select a Building for Details:", building_summary["Buildings Name"])
             if selected_building:
-                st.markdown(f"<h3>Details for {selected_building}</h3>", unsafe_allow_html=True)
                 building_data = building_summary[building_summary["Buildings Name"] == selected_building]
                 avg_sentiment = building_data["Avg_Sentiment"].values[0]
                 count = building_data["Count"].values[0]
+
+                st.markdown(f"<h3>Details for {selected_building}</h3>", unsafe_allow_html=True)
                 st.write(f"**Average Sentiment Score:** {avg_sentiment:.2f}")
                 st.write(f"**Total Responses:** {count}")
-                
+
                 st.markdown("<h4>Key Responses:</h4>", unsafe_allow_html=True)
                 building_responses = df[df["Buildings Name"] == selected_building]
-
-                responses = []
                 for _, row in building_responses.iterrows():
                     sentiment = (
                         "🟢" if row["Avg_Sentiment"] > 0.2 else "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"
                     )
-                    responses.append({
-                        "response": f"*{row['Tell us about your classroom']}*",
-                        "sentiment": sentiment,
-                        "score": row["Avg_Sentiment"]
-                    })
+                    st.markdown(f"{sentiment} {row['Tell us about your classroom']}")
 
-                positive = [r for r in responses if r["score"] > 0.2]
-                neutral = [r for r in responses if -0.2 <= r["score"] <= 0.2]
-                negative = [r for r in responses if r["score"] < -0.2]
-
-                balanced_responses = positive[:2] + neutral[:2] + negative[:2]
-                balanced_responses_sorted = sorted(balanced_responses, key=lambda x: x["score"], reverse=True)
-
-                for res in balanced_responses_sorted:
-                    st.markdown(f"{res['sentiment']} {res['response']}")
-
-                st.markdown("<h4>AI-Generated Recommendation:</h4>", unsafe_allow_html=True)
-                recommendation = ""
-
+                # AI-Generated Recommendation
+                st.markdown("<h4>Design Recommendation:</h4>", unsafe_allow_html=True)
                 if avg_sentiment > 0.2:
-                    recommendation = f"The overall sentiment for {selected_building} is positive. Consider maintaining its current strengths, such as lighting and space, while exploring minor upgrades in seating and technology."
+                    recommendation = "The building has a positive sentiment. Focus on enhancing its strengths like lighting and space."
                 elif -0.2 <= avg_sentiment <= 0.2:
-                    recommendation = f"The sentiment for {selected_building} is neutral. Focus on improving lighting and seating arrangements to create a more comfortable environment."
+                    recommendation = "The sentiment is neutral. Improve seating and accessibility to elevate user experience."
                 else:
-                    recommendation = f"The sentiment for {selected_building} is negative. Prioritize redesigning outdated spaces, improving accessibility, and adding modern layouts to boost user satisfaction."
-
+                    recommendation = "The sentiment is negative. Prioritize redesigning cramped spaces and improving usability."
                 st.markdown(f"*{recommendation}*")
 
     except Exception as e:
-        st.error(f"An error occurred: {str(e)}")
+        st.error(f"An error occurred: {e}")
 else:
-    st.info("Please upload a CSV file to begin the analysis.")
+    st.info("Please upload a CSV file to start the analysis.")
