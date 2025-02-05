@@ -21,15 +21,20 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# File Upload
+
+# File Upload Section
 uploaded_file = st.file_uploader("Upload your dataset (CSV format)", type=["csv"])
+
 if uploaded_file:
     try:
         # Load Data
-        df = pd.read_csv(uploaded_file)
+        df = pd.read_csv(uploaded_file, encoding="ISO-8859-1")
+
+        # Ensure required columns exist
         required_columns = ["Latitude", "Longitude", "Buildings Name", "Tell us about your classroom"]
-        if not all(col in df.columns for col in required_columns):
-            st.error(f"Missing required columns: {', '.join(required_columns)}")
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            st.error(f"The following required columns are missing: {missing_columns}")
         else:
             # Sentiment Analysis
             sia = SentimentIntensityAnalyzer()
