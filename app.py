@@ -54,7 +54,7 @@ if uploaded_file:
             "This map visualizes the sentiment scores for each building based on user feedback. Each point's color represents the sentiment: green (positive), orange (neutral), or red (negative)."
         )
         map_center = [df["Latitude"].mean(), df["Longitude"].mean()]
-        folium_map = folium.Map(location=map_center, zoom_start=15)
+        folium_map = folium.Map(location=map_center, zoom_start=15, control_scale=True)  # Map set to static
 
         for _, row in building_summary.iterrows():
             sentiment_color = (
@@ -176,7 +176,7 @@ if uploaded_file:
                     "🟢" if row["Avg_Sentiment"] > 0.2 else
                     "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"
                 )
-                if len(row["Tell us about your classroom"].split()) > 5:  # Only meaningful responses
+                if len(row["Tell us about your classroom"].split()) > 5:
                     responses.append({
                         "response": row["Tell us about your classroom"],
                         "sentiment": sentiment,
