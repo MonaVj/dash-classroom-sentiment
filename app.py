@@ -128,7 +128,7 @@ if uploaded_file:
                         "🔴"
                     )
                     responses.append({
-                        "response": f"*{row['Tell us about your classroom']}*",
+                        "response": f"In {row['Buildings Name']}, {row['Tell us about your classroom']}.",
                         "sentiment": sentiment_icon,
                         "score": row["Avg_Sentiment"]
                     })
@@ -172,7 +172,7 @@ if uploaded_file:
                         "🔴"
                     )
                     responses.append({
-                        "response": f"*{row['Tell us about your classroom']}*",
+                        "response": f"{row['Tell us about your classroom']}",
                         "sentiment": sentiment,
                         "score": row["Avg_Sentiment"]
                     })
@@ -187,11 +187,20 @@ if uploaded_file:
 
                 st.markdown("<h4>Design Recommendation:</h4>", unsafe_allow_html=True)
                 if avg_sentiment > 0.2:
-                    recommendation = "Focus on preserving strengths, enhancing accessibility and technology."
+                    recommendation = (
+                        f"{selected_building} has positive feedback. Maintain its strengths in comfort and "
+                        f"collaboration while enhancing technology integration."
+                    )
                 elif -0.2 <= avg_sentiment <= 0.2:
-                    recommendation = "Prioritize improved lighting, comfort, and space optimization."
+                    recommendation = (
+                        f"{selected_building} has a neutral response. Focus on improving lighting and layout "
+                        f"to create a more inviting and functional space."
+                    )
                 else:
-                    recommendation = "Redesign outdated areas with better layouts and modern furniture."
+                    recommendation = (
+                        f"{selected_building} has negative feedback. Redesign outdated spaces with better layouts, "
+                        f"modern furniture, and improved accessibility."
+                    )
                 st.markdown(f"*{recommendation}*")
 
     except Exception as e:
