@@ -24,7 +24,7 @@ if uploaded_file:
         # Load Data
         df = pd.read_csv(uploaded_file, encoding="ISO-8859-1")
 
-        # Verify required columns
+        # Validate required columns
         required_columns = ["Latitude", "Longitude", "Buildings Name", "Tell us about your classroom"]
         if not all(col in df.columns for col in required_columns):
             st.error("Uploaded file is missing required columns.")
@@ -102,13 +102,29 @@ if uploaded_file:
                 st.dataframe(grouped_theme_data[["Buildings Name", "Avg_Sentiment", "Count", "Sentiment"]])
 
                 st.markdown(f"<h3>Key Responses for '{selected_theme}'</h3>", unsafe_allow_html=True)
+                responses = []
                 for _, row in theme_data.iterrows():
                     sentiment = (
                         "🟢" if row["Avg_Sentiment"] > 0.2 else
                         "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else
                         "🔴"
                     )
-                    st.markdown(f"{sentiment} *In {row['Buildings Name']}, {row['Tell us about your classroom']}*")
+                    responses.append({
+                        "response": f"*In {row['Buildings Name']}, {row['Tell us about your classroom']}*",
+                        "sentiment": sentiment,
+                        "score": row["Avg_Sentiment"]
+                    })
+
+                # Sort responses by sentiment (Good → Neutral → Bad)
+                positive = [r for r in responses if r["score"] > 0.2]
+                neutral = [r for r in responses if -0.2 <= r["score"] <= 0.2]
+                negative = [r for r in responses if r["score"] < -0.2]
+
+                # Balance responses: 2 positive, 2 neutral, 2 negative
+                balanced_responses = positive[:2] + neutral[:2] + negative[:2]
+
+                for res in balanced_responses:
+                    st.markdown(f"{res['sentiment']} {res['response']}")
 
             # Section 3: Building-Specific Analysis
             st.markdown("<h2>Sentiment Classification by Buildings</h2>", unsafe_allow_html=True)
@@ -137,6 +153,18 @@ if uploaded_file:
                     st.markdown(f"*Consider improving the lighting and seating in {selected_building} to make it more engaging and comfortable.*")
                 else:
                     st.markdown(f"*Redesign key areas in {selected_building} with better layouts, updated furniture, and improved accessibility.*")
+
+            # Tree Map Visualization
+            st.markdown("<h2>Building Sentiment Treemap</h2>", unsafe_allow_html=True)
+            fig = px.treemap(
+                building_summary,
+                path=["Buildings Name"],
+                values="Count",
+                color="Avg_Sentiment",
+                color_continuous_scale="RdYlGn",
+                title="Sentiment Treemap by Building",
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
