@@ -4,9 +4,6 @@ import folium
 from streamlit_folium import folium_static
 import plotly.express as px
 from nltk.sentiment import SentimentIntensityAnalyzer
-import nltk
-
-nltk.download("vader_lexicon")
 
 # Page Configuration
 st.set_page_config(
@@ -29,12 +26,10 @@ if uploaded_file:
 
         # Check for required columns
         required_columns = ["Latitude", "Longitude", "Buildings Name", "Tell us about your classroom"]
-        missing_columns = [col for col in required_columns if col not in df.columns]
-
-        if missing_columns:
-            st.error(f"The following required columns are missing: {missing_columns}")
+        if not all(col in df.columns for col in required_columns):
+            st.error(f"Missing required columns. Ensure the file contains: {', '.join(required_columns)}")
         else:
-            # Drop rows with missing Latitude or Longitude
+            # Drop rows with missing coordinates
             df = df.dropna(subset=["Latitude", "Longitude"])
 
             # Sentiment Analysis
@@ -53,7 +48,10 @@ if uploaded_file:
             ).reset_index()
 
             # Section 1: Overall Sentiment Map
-            st.markdown("<h2>Overall Sentiment Analysis Map</h2>", unsafe_allow_html=True)
+            st.markdown(
+                "<h2 style='margin-top: 30px;'>Overall Sentiment Analysis of Classroom Spaces by Buildings</h2>",
+                unsafe_allow_html=True,
+            )
             map_center = [df["Latitude"].mean(), df["Longitude"].mean()]
             folium_map = folium.Map(location=map_center, zoom_start=15, scrollWheelZoom=False)
 
@@ -83,11 +81,11 @@ if uploaded_file:
                 st.markdown("🟢 Positive (> 0.2)")
                 st.markdown("🟠 Neutral (-0.2 to 0.2)")
                 st.markdown("🔴 Negative (< -0.2)")
-                st.markdown(f"**Total Responses:** {len(df)}")
 
             # Section 2: Explore Emerging Themes and Responses
-            st.markdown("<h2>Explore Emerging Themes and Responses</h2>", unsafe_allow_html=True)
+            st.markdown("<h2 style='margin-top: 30px;'>Explore Emerging Themes and Responses</h2>", unsafe_allow_html=True)
 
+            # Predefined keywords for each theme
             theme_keywords = {
                 "Spacious": ["spacious", "roomy", "open space", "ample", "not cramped"],
                 "Lighting": ["bright", "natural light", "well-lit", "dark", "dim"],
@@ -95,14 +93,18 @@ if uploaded_file:
                 "Accessibility": ["accessible", "ramp", "wheelchair", "disability", "parking"],
                 "Collaborative": ["collaborative", "group", "discussion", "teamwork"],
             }
+
+            # Theme selection
             themes = list(theme_keywords.keys())
             selected_theme = st.radio("Select a Theme to Explore:", themes, index=0)
 
             if selected_theme:
                 st.markdown(f"<h3>Buildings Mentioning '{selected_theme}'</h3>", unsafe_allow_html=True)
+
                 keywords = theme_keywords[selected_theme]
                 theme_data = df[df["Tell us about your classroom"].str.contains('|'.join(keywords), case=False, na=False)]
 
+                # Aggregate sentiment and response data
                 grouped_theme_data = theme_data.groupby("Buildings Name").agg({
                     "Tell us about your classroom": list,
                     "Avg_Sentiment": "mean",
@@ -119,16 +121,15 @@ if uploaded_file:
                 )
                 st.dataframe(grouped_theme_data_display, use_container_width=True)
 
+                # Display key responses for the theme
                 st.markdown(f"<h3>Key Responses for '{selected_theme}'</h3>", unsafe_allow_html=True)
                 responses = []
                 for _, row in theme_data.iterrows():
                     sentiment_icon = (
-                        "🟢" if row["Avg_Sentiment"] > 0.2 else 
-                        "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else 
-                        "🔴"
+                        "🟢" if row["Avg_Sentiment"] > 0.2 else "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"
                     )
                     responses.append({
-                        "response": f"In {row['Buildings Name']}, {row['Tell us about your classroom']}.",
+                        "response": f"*In {row['Buildings Name']}, {row['Tell us about your classroom']}*",
                         "sentiment": sentiment_icon,
                         "score": row["Avg_Sentiment"]
                     })
@@ -142,17 +143,7 @@ if uploaded_file:
                     st.markdown(f"{res['sentiment']} {res['response']}")
 
             # Section 3: Sentiment Classification by Buildings
-            st.markdown("<h2>Sentiment Classification by Buildings</h2>", unsafe_allow_html=True)
-
-            fig = px.treemap(
-                building_summary,
-                path=["Buildings Name"],
-                values="Count",
-                color="Avg_Sentiment",
-                color_continuous_scale="RdYlGn",
-                title="Building Sentiment Treemap",
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            st.markdown("<h2 style='margin-top: 30px;'>Sentiment Classification by Buildings</h2>", unsafe_allow_html=True)
 
             selected_building = st.selectbox("Select a Building for Details:", building_summary["Buildings Name"])
             if selected_building:
@@ -166,14 +157,12 @@ if uploaded_file:
                 building_responses = df[df["Buildings Name"] == selected_building]
                 responses = []
                 for _, row in building_responses.iterrows():
-                    sentiment = (
-                        "🟢" if row["Avg_Sentiment"] > 0.2 else 
-                        "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else 
-                        "🔴"
+                    sentiment_icon = (
+                        "🟢" if row["Avg_Sentiment"] > 0.2 else "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"
                     )
                     responses.append({
-                        "response": f"{row['Tell us about your classroom']}",
-                        "sentiment": sentiment,
+                        "response": f"*{row['Tell us about your classroom']}*",
+                        "sentiment": sentiment_icon,
                         "score": row["Avg_Sentiment"]
                     })
 
@@ -185,25 +174,26 @@ if uploaded_file:
                 for res in balanced_responses:
                     st.markdown(f"{res['sentiment']} {res['response']}")
 
-                st.markdown("<h4>Design Recommendation:</h4>", unsafe_allow_html=True)
+                # Design Recommendations
+                st.markdown("<h4>Design Recommendations:</h4>", unsafe_allow_html=True)
+                recommendations = []
                 if avg_sentiment > 0.2:
-                    recommendation = (
-                        f"{selected_building} has positive feedback. Maintain its strengths in comfort and "
-                        f"collaboration while enhancing technology integration."
-                    )
-                elif -0.2 <= avg_sentiment <= 0.2:
-                    recommendation = (
-                        f"{selected_building} has a neutral response. Focus on improving lighting and layout "
-                        f"to create a more inviting and functional space."
-                    )
-                else:
-                    recommendation = (
-                        f"{selected_building} has negative feedback. Redesign outdated spaces with better layouts, "
-                        f"modern furniture, and improved accessibility."
-                    )
-                st.markdown(f"*{recommendation}*")
+                    recommendations = [
+                        "Maintain current strengths like lighting and seating.",
+                        "Add collaboration spaces.",
+                        "Upgrade AV systems.",
+                    ]
+                elif avg_sentiment <= -0.2:
+                    recommendations = [
+                        "Address outdated infrastructure.",
+                        "Add accessible pathways.",
+                        "Reconfigure layouts."
+                    ]
+
+                for rec in recommendations:
+                    st.markdown(f"- {rec}")
 
     except Exception as e:
-        st.error(f"An error occurred: {str(e)}")
+        st.error(f"An error occurred: {e}")
 else:
     st.info("Please upload a CSV file to begin the analysis.")
