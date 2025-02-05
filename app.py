@@ -4,7 +4,7 @@ import folium
 from streamlit_folium import folium_static
 import plotly.express as px
 from nltk.sentiment import SentimentIntensityAnalyzer
-import language_tool_python
+from textblob import TextBlob
 
 # Page Configuration
 st.set_page_config(
@@ -46,12 +46,15 @@ if uploaded_file:
 
             # Sentiment Analysis
             sia = SentimentIntensityAnalyzer()
-            tool = language_tool_python.LanguageTool('en-US')  # Grammar correction tool
+            if "Avg_Sentiment" not in df.columns:
+                df["Avg_Sentiment"] = df["Tell us about your classroom"].apply(
+                    lambda x: sia.polarity_scores(x)["compound"] if pd.notnull(x) else 0
+                )
 
-            df["Avg_Sentiment"] = df["Tell us about your classroom"].apply(
-                lambda x: sia.polarity_scores(x)["compound"] if pd.notnull(x) else 0
-            )
-            df["Count"] = 1
+            if "Count" not in df.columns:
+                df["Count"] = 1
+            else:
+                df["Count"] = df["Count"].fillna(0).astype(int)
 
             # Aggregate data by building
             building_summary = df.groupby("Buildings Name").agg(
@@ -132,7 +135,8 @@ if uploaded_file:
                     sentiment_icon = (
                         "🟢" if row["Avg_Sentiment"] > 0.2 else "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"
                     )
-                    corrected_response = tool.correct(row["Tell us about your classroom"])
+                    response_text = row["Tell us about your classroom"]
+                    corrected_response = TextBlob(response_text).correct()  # Correct grammar
                     responses.append({
                         "response": f"*{corrected_response}*",
                         "sentiment": sentiment_icon,
@@ -168,7 +172,7 @@ if uploaded_file:
                     sentiment = (
                         "🟢" if row["Avg_Sentiment"] > 0.2 else "🟠" if -0.2 <= row["Avg_Sentiment"] <= 0.2 else "🔴"
                     )
-                    corrected_response = tool.correct(row["Tell us about your classroom"])
+                    corrected_response = TextBlob(row["Tell us about your classroom"]).correct()  # Correct grammar
                     responses.append({
                         "response": f"*{corrected_response}*",
                         "sentiment": sentiment,
@@ -188,11 +192,11 @@ if uploaded_file:
                 st.markdown("<h4>Design Recommendation:</h4>", unsafe_allow_html=True)
                 recommendation = ""
                 if avg_sentiment > 0.2:
-                    recommendation = f"The overall sentiment for {selected_building} is positive. Maintain strengths and consider minor improvements."
+                    recommendation = f"The overall sentiment for {selected_building} is positive. Consider maintaining its current strengths, such as lighting, space, and accessibility, while exploring minor upgrades in furniture and technology to further enhance user experience."
                 elif -0.2 <= avg_sentiment <= 0.2:
-                    recommendation = f"The sentiment for {selected_building} is neutral. Focus on lighting and comfort upgrades."
+                    recommendation = f"The sentiment for {selected_building} is neutral. Focus on improving lighting and seating arrangements to create a more comfortable and engaging environment. Address any functional gaps to elevate user satisfaction."
                 else:
-                    recommendation = f"The sentiment for {selected_building} is negative. Prioritize addressing accessibility and space issues."
+                    recommendation = f"The sentiment for {selected_building} is negative. Prioritize redesigning cramped or outdated spaces in {selected_building}. Consider improving accessibility, upgrading technology, and adding collaborative areas to boost functionality and appeal."
 
                 st.markdown(f"*{recommendation}*")
 
