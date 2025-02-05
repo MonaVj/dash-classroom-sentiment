@@ -4,4 +4,4 @@ folium
 streamlit-folium
 plotly
 nltk
-vaderSentiment
+language-tool-python
