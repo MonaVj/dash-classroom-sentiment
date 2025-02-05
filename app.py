@@ -51,10 +51,12 @@ if uploaded_file:
         # Section 1: Map
         st.subheader("Overall Sentiment Map")
         st.markdown(
-            "This map visualizes the sentiment scores for each building based on user feedback. Each point's color represents the sentiment: green (positive), orange (neutral), or red (negative)."
+            "This map visualizes the sentiment scores for each building based on user feedback. "
+            "Each point's color represents the sentiment: green (positive), orange (neutral), or red (negative)."
         )
+
         map_center = [df["Latitude"].mean(), df["Longitude"].mean()]
-        folium_map = folium.Map(location=map_center, zoom_start=15, control_scale=True)  # Map set to static
+        folium_map = folium.Map(location=map_center, zoom_start=15, control_scale=True)
 
         for _, row in building_summary.iterrows():
             sentiment_color = (
@@ -74,6 +76,11 @@ if uploaded_file:
                 fill_color=sentiment_color,
                 popup=folium.Popup(popup_content, max_width=250),
             ).add_to(folium_map)
+
+        # Disable interactivity for the map
+        folium_map.options["scrollWheelZoom"] = False
+        folium_map.options["dragging"] = False
+        folium_map.options["zoomControl"] = False
 
         col1, col2 = st.columns([4, 1])
         with col1:
