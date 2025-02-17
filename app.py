@@ -25,7 +25,7 @@ if uploaded_file:
     df = pd.read_csv(uploaded_file, encoding="ISO-8859-1")
 
     # 📊 Show Scrollable Preview of Uploaded Data
-    st.subheader("📊 Preview of Uploaded Data")
+    st.subheader("Preview of Uploaded Data")
     st.dataframe(df, height=400, width=1000)  # Enables scrolling with a fixed height
 
     # Ensure required columns exist
