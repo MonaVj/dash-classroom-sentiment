@@ -24,9 +24,9 @@ if uploaded_file:
     # Load Data
     df = pd.read_csv(uploaded_file, encoding="ISO-8859-1")
 
-    # 📌 **New Feature: Show Preview of Uploaded File**
+    # 📌 **New Feature: Show Full Scrollable Preview of Uploaded File**
     st.subheader("📊 Preview of Uploaded Data")
-    st.dataframe(df.head(5))  # Show first 5 rows of the dataset
+    st.dataframe(df, height=400, width=1000)  # Enables scrolling with a fixed height
 
     # Ensure required columns exist
     required_columns = ["Latitude", "Longitude", "Buildings Name", "Tell us about your classroom"]
@@ -80,11 +80,6 @@ if uploaded_file:
                 fill_color=sentiment_color,
                 popup=folium.Popup(popup_content, max_width=250),
             ).add_to(folium_map)
-
-        # Disable interactivity for the map
-        folium_map.options["scrollWheelZoom"] = False
-        folium_map.options["dragging"] = False
-        folium_map.options["zoomControl"] = False
 
         col1, col2 = st.columns([4, 1])
         with col1:
