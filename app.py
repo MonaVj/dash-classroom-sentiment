@@ -37,6 +37,10 @@ if uploaded_file:
         # Drop rows with missing coordinates
         df = df.dropna(subset=["Latitude", "Longitude"])
 
+        # Fix missing NLTK resources
+        import nltk
+        nltk.download('vader_lexicon')  # Ensure vader_lexicon is available
+
         # Sentiment Analysis
         sia = SentimentIntensityAnalyzer()
         df["Avg_Sentiment"] = df["Tell us about your classroom"].apply(
