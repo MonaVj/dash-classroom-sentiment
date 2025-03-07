@@ -4,4 +4,6 @@ folium>=0.14.0
 streamlit-folium>=0.13.0
 plotly>=5.17.0
 nltk>=3.8.1
+bootstrap4>=0.1.0
 transformers>=4.35.0
+itertools
