@@ -6,4 +6,5 @@ nltk
 keplergl
 streamlit-keplergl
 torch
-bootstrap
+requests
+scipy
